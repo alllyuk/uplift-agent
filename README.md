@@ -89,6 +89,9 @@ LLM в проекте отвечает за оркестрацию и объяс
 
 ## Репозиторий
 
-- `README.md` — краткое описание проекта
-- `docs/product-proposal.md` — продуктовая постановка, метрики, архитектура, data flow
-- `docs/governance.md` — риски, защита, логирование, работа с данными
+- `README.md` — краткое описание проекта и scope PoC
+- `docs/product-proposal.md` — продуктовая постановка, цель, метрики и сценарии использования
+- `docs/system-design.md` — обзор архитектуры PoC-системы
+- `docs/diagrams/` — C4-диаграммы, workflow и data flow
+- `docs/specs/` — детальные спецификации orchestrator, memory/context, retriever, tools/APIs, serving, observability
+- `docs/governance.md` — риски, защита, логирование и работа с данными
