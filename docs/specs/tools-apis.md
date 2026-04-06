@@ -93,7 +93,7 @@ result: PSMResult = analyzer.run(df)
 | Ошибка | Обработка |
 |--------|-----------|
 | Отсутствие столбцов | `{ok: False, error: str}` |
-| Мало matched pairs | Результат с `n_pairs < 50` — degraded |
+| Мало matched pairs (`n_pairs < 50`) | `{ok: False, ate, att, n_pairs}` — числа возвращаются, но `ok=False` сигнализирует ненадёжность |
 
 Latency: CPU-bound, обычно < 10с на 3000 клиентов.
 

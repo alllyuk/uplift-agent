@@ -96,7 +96,8 @@ START
 
 **Ключевые моменты:**
 - **policy_check** включает cooldown через SQLite (30 дней). При недоступности SQLite — fail-open с `requires_human_review = True`.
-- **estimation** — параллельный запуск PSM + RAG + Graph. Каждый может fail независимо → degraded mode.
+- **estimation** — параллельный запуск PSM + RAG + Graph. Каждый может fail независимо → degraded mode. Если все 3 источника недоступны — abort с `no_evidence` (синтез без данных не имеет смысла).
+- **PSM** — при `n_pairs < 50` возвращает `ok=False` (числа доступны, но ненадёжны).
 - **critic_check** — 5 rule-based проверок. Макс. 1 retry.
 
 ---
@@ -142,7 +143,7 @@ START
 Система опирается на три слоя защиты:
 
 - **Rule-based policy-check:** блокирует недопустимые интервенции до вызова synthesis
-- **Degraded execution:** PSM, RAG и Graph могут падать независимо; кейс продолжается с пониженной уверенностью
+- **Degraded execution:** PSM, RAG и Graph могут падать независимо; кейс продолжается с пониженной уверенностью. Если все 3 недоступны — abort (`no_evidence`)
 - **Critic / guardrail:** проверяет числовую консистентность, атрибуцию источников, валидность рёбер графа, хеджирование и полноту ответа
 
 Safe failure policy:

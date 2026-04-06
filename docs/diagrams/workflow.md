@@ -27,6 +27,7 @@ stateDiagram-v2
     }
 
     estimation --> synthesize : evidence ready
+    estimation --> persist_aborted : all 3 sources failed
 
     synthesize --> critic_check : draft answer
     synthesize --> persist_aborted : LLM unavailable
@@ -47,10 +48,11 @@ flowchart LR
     PSM_FAIL[PSM unavailable] --> DEGRADED[Continue in degraded mode]
     RAG_FAIL[RAG unavailable] --> DEGRADED
     GRAPH_FAIL[Graph artifacts unavailable] --> DEGRADED
+    ALL_FAIL[All 3 sources failed] --> ABORT[abort: no_evidence]
     CRITIC_FAIL[Critic still failing after retry] --> REVIEW[Mark for human review]
-    STORE_FAIL[Case Store unavailable] --> SAFE_FAIL[Safe failure]
+    SQLITE_FAIL[SQLite unavailable] --> SKIP[Cooldown skip + persist skip]
 
     DEGRADED --> REVIEW
     REVIEW --> PERSIST[persist_warning<br/>requires_human_review = true]
-    SAFE_FAIL --> ABORT[persist_aborted<br/>or explicit abort response]
+    SKIP --> LOG[Результат только в Loguru<br/>requires_human_review = true]
 ```

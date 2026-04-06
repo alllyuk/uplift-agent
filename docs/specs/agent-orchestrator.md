@@ -81,6 +81,8 @@ Rule-based проверки допустимости:
 | **RAG** | query из delta или raw_query, top_k=3 | `list[str]` чанков | `rag_chunks = []` |
 | **Graph DSL** | graph_method, min_conf | DSL-строка рёбер | `graph_dsl = ""` |
 
+**Precondition перед synthesize:** если все 3 источника недоступны (`psm_result is None` и `rag_chunks == []` и `graph_dsl == ""`), кейс прерывается — abort с `abort_reason = "no_evidence"`. Синтез без единого источника данных не имеет смысла.
+
 ### 3.5 synthesize
 
 1. Выбор шаблона промпта для оценки заданной интервенции
@@ -124,7 +126,9 @@ Rule-based проверки допустимости:
 |----------|-----------|
 | LLM: невалидный JSON | JSON mode → text mode fallback |
 | Critic fail | Повторный synthesize с issues (макс. 1 retry) |
-| PSM / RAG / Graph fail | Skip, degraded mode |
+| PSM / RAG / Graph fail (частично) | Skip, degraded mode |
+| Все 3 источника недоступны | Abort с `no_evidence` |
+| PSM: `n_pairs < 50` | `ok=False`, числа доступны но ненадёжны |
 | LLM timeout | 1 retry, затем abort |
 | SQLite недоступен | Cooldown skip (fail-open), persist skip, Loguru only |
 
