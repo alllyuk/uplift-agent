@@ -53,42 +53,15 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 ### 3.1 CaseState
 
-Все данные между узлами LangGraph через единый TypedDict:
+Все данные между узлами LangGraph передаются через единый `CaseState`. На уровне системного дизайна важны 5 групп полей:
 
-```python
-class CaseState(TypedDict):
-    case_id: str                          # UUID
-    mode: Literal["evaluate", "recommend"]
-    client_id: str
-    raw_query: str | None
+- **Идентификация:** `case_id`, `mode`, `client_id`, `raw_query`
+- **Контекст кейса:** `client_context`, `intervention_delta`
+- **Промежуточные результаты:** `policy_result`, `psm_result`, `rag_chunks`, `graph_dsl`
+- **Финальный ответ и контроль качества:** `explanation`, `critic_result`, `retry_count`
+- **Служебные метаданные:** `status`, `requires_human_review`, `review_reason`, `trace_id`, `latency_ms`, `abort_reason`
 
-    client_context: dict                  # 25 полей
-    intervention_delta: dict              # {"New_Product_Offer": 1, ...}
-
-    policy_result: dict                   # {blocked, reasons, notes}
-
-    psm_result: dict | None               # {ok, ate, att, n_pairs}
-    rag_chunks: list[str]
-    graph_dsl: str
-
-    explanation: dict                     # {diagnosis, drivers_pos, drivers_neg, ...}
-    critic_result: dict                   # {passed, issues}
-    retry_count: int
-
-    # Recommend mode
-    candidate_results: list[dict] | None  # [{delta, psm_result, explanation, critic_result}, ...]
-    selected_candidate: dict | None
-
-    # Human review
-    requires_human_review: bool
-    review_reason: str | None
-
-    # Метаданные
-    status: str                           # intake|...|done|aborted|degraded
-    abort_reason: str | None
-    trace_id: str | None
-    latency_ms: int | None
-```
+Полное определение TypedDict и семантика каждого поля вынесены в `specs/agent-orchestrator.md`.
 
 ### 3.2 Граф состояний
 
@@ -141,111 +114,54 @@ START
 
 ## 4. State / Memory
 
-### 4.1 Сессионное состояние
+`CaseState` живёт в памяти LangGraph только на время одного кейса. Агент не использует прошлые кейсы как memory для новых рекомендаций; SQLite нужен для audit trail и cooldown safety-check.
 
-`CaseState` живёт в памяти LangGraph на время одного кейса. Агент **не использует** результаты прошлых кейсов для генерации рекомендаций — каждый запрос независимый. SQLite audit log используется только для cooldown-проверки в policy_check (safety-механизм, не агентская память).
+Ключевые решения:
+- **Персистентность:** одна таблица `cases` в SQLite для результата кейса, статуса, review-маркеров и `trace_id`
+- **Контекстный бюджет:** около `~5000` input tokens на LLM-вызов; порядок сокращения при переполнении: `RAG → Graph DSL → PSM-summary`
+- **Retention:** `SQLite cases = 365 дней`, `Loguru = 90 дней`, `LangSmith` — по политике внешнего сервиса
 
-### 4.2 SQLite
-
-```sql
-CREATE TABLE cases (
-    case_id       TEXT PRIMARY KEY,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    mode          TEXT NOT NULL,
-    client_id     TEXT NOT NULL,
-    raw_query     TEXT,
-    request_json  TEXT NOT NULL,
-    context_json  TEXT NOT NULL,
-    result_json   TEXT,
-    status        TEXT NOT NULL CHECK (status IN ('done', 'aborted', 'degraded')),
-    abort_reason  TEXT,
-    requires_human_review BOOLEAN DEFAULT FALSE,
-    review_reason TEXT,
-    trace_id      TEXT,
-    latency_ms    INTEGER,
-    updated_at    TIMESTAMP
-);
-```
-
-### 4.3 Бюджет контекста
-
-~5000 tokens input на вызов LLM. Защита: модуль truncation (tiktoken, 2000 tokens/msg). При нехватке бюджета приоритет сокращения: RAG → Graph DSL → PSM-summary. System prompt и профиль не сокращаются.
-
-Подробнее: `specs/memory-context.md`.
-
-### 4.4 Retention
-
-- SQLite `cases`: 365 дней
-- Loguru: 90 дней
+Полная схема SQLite, cooldown-query, TTL и PII-политика вынесены в `specs/memory-context.md`.
 
 ---
 
 ## 5. Источники данных для estimation
 
-Три параллельных источника обогащают контекст рекомендации:
+Три параллельных источника обогащают recommendation pipeline:
 
-### 5.1 PSM (количественная оценка эффекта)
+- **PSM:** числовая оценка эффекта интервенции (`ATE`, `ATT`, `n_pairs`)
+- **Причинно-следственный граф:** структурный контекст о связях между признаками
+- **RAG:** документальный контекст из банковского корпуса
 
-Propensity Score Matching по синтетическому датасету (3000 клиентов). Результат: ATE, ATT, n_pairs — числовая оценка ожидаемого эффекта интервенции. Подробнее: `specs/tools-apis.md` §3.
-
-### 5.2 Причинно-следственный граф
-
-DAG причинно-следственных связей между признаками клиентов. Строится offline (LLM-анализ, алгоритмические методы или гибрид). Хранится как JSON с рёбрами `{source, target, sign, confidence, note}`. При запросе: фильтрация по `confidence ≥ min_conf` → DSL-строка для промпта вида `"Industry -> Revenue | sign:+ | conf:0.85"`. Даёт LLM структурное понимание каузальных механизмов. Подробнее: `specs/tools-apis.md` §4.
-
-### 5.3 RAG (документальный контекст)
-
-FAISS `IndexFlatIP` + `multilingual-e5-small` (384-dim). 50 банковских документов (рус + англ). Чанкинг: `RecursiveCharacterTextSplitter` (1500/120/1000). Поиск: top_k=3 для what-if. Даёт LLM контекст из банковской аналитики. Подробнее: `specs/retriever.md`.
+Подробные контракты и параметры вынесены в `specs/tools-apis.md` и `specs/retriever.md`.
 
 ---
 
 ## 6. Tool/API интеграции
 
-| Tool | Контракт | Latency | При ошибке |
-|------|----------|---------|------------|
-| **OpenAI LLM** | `ChatOpenAI.invoke(messages) → AIMessage`. JSON mode + text fallback. | ~3-7с | Retry (1), затем abort |
-| **PSM** | `CausalInferenceAnalyzer.run(df) → PSMResult(ate, att, n_pairs)` | < 5с | `psm_result = None`, degraded |
-| **Graph DSL** | `load_graph_dsl(method, min_conf) → str`. In-memory кэш. | < 100мс | `graph_dsl = ""`, degraded |
-| **RAG** | `RAG.perform_query(query, top_k) → list[str]`. FAISS search. | < 2с | `rag_chunks = []`, degraded |
+Интеграции делятся на две группы:
 
-Подробнее: `specs/tools-apis.md`.
+- **Внешний runtime dependency:** OpenAI API для LLM-вызовов. Используется JSON mode с text fallback; защитный timeout — `120с`.
+- **Локальные инструменты:** PSM, Graph DSL loader и RAG. Все три могут деградировать независимо, не останавливая весь кейс, если это не ломает safety-политику.
+
+Подробные контракты, параметры, latency и side effects вынесены в `specs/tools-apis.md`.
 
 ---
 
 ## 7. Failure modes и guardrails
 
-### 7.1 Failure modes
+Система опирается на три слоя защиты:
 
-| Сценарий | Защита | Остаточный риск |
-|----------|--------|-----------------|
-| LLM: невалидный JSON | JSON mode → text fallback → regex | Низкий |
-| LLM галлюцинирует рёбра | Critic check: ребро есть в graph DSL | Средний |
-| PSM fail (мало данных) | Degraded mode, промпт без PSM | Средний |
-| Policy блокирует | Ранний return с причиной | Низкий |
-| RAG: нерелевантные чанки | Critic: doc_id есть в retrieved chunks | Средний |
-| Overconfident при слабых данных | Critic: маркеры категоричности | Средний |
-| OpenAI API недоступен | Retry (1), затем abort | Средний |
-| SQLite недоступен | Cooldown skip (fail-open) + human review flag. Persist skip, только Loguru. | Средний |
+- **Rule-based policy-check:** блокирует недопустимые интервенции до вызова synthesis
+- **Degraded execution:** PSM, RAG и Graph могут падать независимо; кейс продолжается с пониженной уверенностью
+- **Critic / guardrail:** проверяет числовую консистентность, атрибуцию источников, валидность рёбер графа, хеджирование и полноту ответа
 
-### 7.2 Critic: 5 проверок
+Safe failure policy:
+- максимум `1` retry на этапе synthesis после critic fail;
+- при неустранимой ошибке или слабой уверенности выставляется `requires_human_review = True`;
+- типовые триггеры: `status == degraded`, `|ATT| < 0.001` при слабых данных, critic fail после retry, отсутствие валидных кандидатов, недоступность SQLite при cooldown.
 
-1. **Числовая консистентность**: ATT/ATE в тексте ↔ `psm_result`
-2. **Атрибуция**: цитируемый doc_id ∈ `rag_chunks`
-3. **Валидность рёбер**: "A → B" ∈ `graph_dsl`
-4. **Хеджирование**: при слабых PSM-данных нет категоричных формулировок
-5. **Полнота**: все обязательные поля Explanation заполнены
-
-Retry: инъекция issues в промпт (макс. 1 retry). Подробнее: `specs/observability-evals.md`.
-
-### 7.3 Safe failure policy
-
-При неустранимом сбое или низкой уверенности: `requires_human_review = True`, disclaimer в Explanation, явная причина ограничения, trace для диагностики.
-
-**Триггеры human review:**
-- `status == "degraded"` (tool fails)
-- `|ATT| < 0.001` с малым числом пар
-- Critic fail после retry
-- Все кандидаты отбракованы (recommend mode)
-- SQLite недоступен при cooldown
+Полный набор failure modes, critic-checks и observability-метрик вынесен в `specs/observability-evals.md` и `governance.md`.
 
 ---
 

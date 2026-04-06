@@ -27,6 +27,7 @@ response: AIMessage = llm.invoke(messages)
 | temperature | `LLM_TEMPERATURE` env | Из конфигурации |
 | seed | `DataGenerationConfig.seed` | 42 |
 | response_format | Программно | `{"type": "json_object"}` |
+| timeout | Конфигурация клиента | 120с на один LLM-вызов |
 
 ### 2.3 Fallback-стратегия
 
@@ -42,16 +43,21 @@ response: AIMessage = llm.invoke(messages)
 
 | Ошибка | Обработка |
 |--------|-----------|
-| API timeout (60с) | 1 retry, затем abort |
+| API timeout (120с) | 1 retry, затем abort |
 | Rate limit (429) | LangChain встроенный retry с backoff |
 | Invalid API key | Проверка при старте |
 | JSON parse error | Fallback на text mode |
 
 ### 2.6 Cost
 
-~$0.002/кейс: ~10K input tokens + ~2K output tokens × 2 вызова (при GPT-4o-mini rates).
+~$0.002/кейс: суммарно около `~10K` input tokens и `~2K` output tokens на кейс (при 1-2 LLM-вызовах, GPT-4o-mini rates).
 
-### 2.7 Injection protection
+### 2.7 Время выполнения
+
+- Ожидаемая latency одного LLM-вызова: обычно `~10-30с`, в зависимости от модели и размера контекста.
+- Защитный timeout: `120с` на вызов, чтобы не обрывать длинные ответы слишком рано.
+
+### 2.8 Injection protection
 
 - System prompt отделён от user content
 - RAG-документы в user message, не в system
@@ -87,9 +93,9 @@ result: PSMResult = analyzer.run(df)
 | Ошибка | Обработка |
 |--------|-----------|
 | Отсутствие столбцов | `{ok: False, error: str}` |
-| Мало matched pairs | Результат с `n_pairs < threshold` — degraded |
+| Мало matched pairs | Результат с `n_pairs < 50` — degraded |
 
-Latency: CPU-bound, < 5с на 3000 клиентов.
+Latency: CPU-bound, обычно < 10с на 3000 клиентов.
 
 ## 4. Graph DSL Loader
 
@@ -113,7 +119,7 @@ graph_dsl: str = load_graph_dsl(method="llm", min_conf=0.45)
 
 ### 4.3 Ошибки
 
-Файл не найден или невалидный JSON → `graph_dsl = ""` (пустая строка). Latency: < 100мс.
+Файл не найден или невалидный JSON → `graph_dsl = ""` (пустая строка). Latency: обычно < 1с.
 
 ## 5. RAG Query Tool
 
@@ -130,4 +136,4 @@ Pre-built артефакты: `chunks.parquet`, `embeddings.parquet`, `index.fai
 
 ### 5.3 Ошибки
 
-Отсутствие индекса или embeddings → `rag_chunks = []` в LangGraph node. Latency: < 2с.
+Отсутствие индекса или embeddings → `rag_chunks = []` в LangGraph node. Latency: обычно < 5с.
