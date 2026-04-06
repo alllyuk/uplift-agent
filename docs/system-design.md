@@ -96,44 +96,35 @@ class CaseState(TypedDict):
 START
   │
   ▼
-┌─────────┐
-│ intake   │  Парсинг запроса, mode, client_id, delta
-└────┬─────┘
-     ▼
 ┌──────────────┐
-│ load_context  │  Профиль клиента из CSV
+│ intake       │  Парсинг запроса: mode, client_id, delta
 └────┬─────────┘
      ▼
-┌───────────────┐    blocked    ┌───────┐
-│ policy_check   │─────────────▶│ abort  │──▶ persist ──▶ END
-└────┬──────────┘              └───────┘
-     │ ok
-     ├── mode=evaluate ──────────────────────────────┐
-     │                                               │
-     ▼ mode=recommend                                │
-┌─────────────────────────┐                          │
-│ generate_candidates      │                          │
-└────┬────────────────────┘                          │
-     │ candidates[]                                  │
-     ▼ ┌─── for each candidate ───┐                  │
-       │                          │                  ▼
-┌──────────────┐                  │
-│  estimation   │  PSM + RAG + Graph (параллельно)
-└────┬─────────┘                  │
-     ▼
 ┌──────────────┐
-│  synthesize   │  LLM → Explanation
+│ load_context │  Профиль клиента из CSV
 └────┬─────────┘
      ▼
-┌───────────────┐    pass     ┌─────────┐
-│ critic_check   │────────────▶│ persist  │──▶ END
-└────┬──────────┘             └─────────┘
-     │ fail
-     ├── retry_count == 0 ──▶ retry_count := 1 ──▶ synthesize
-     └── retry_count ≥ 1 ──▶ persist_with_warning ──▶ END
-
-(recommend: после critic → результат в candidate_results[],
- цикл к следующему кандидату → ранжирование → persist)
+┌──────────────┐
+│ policy_check │  Eligibility + cooldown
+└────┬─────────┘
+     ├── blocked ─────────────▶ abort ─▶ persist ─▶ END
+     │
+     ├── mode = evaluate ─────▶ estimation ─▶ synthesize ─▶ critic_check
+     │                          PSM + RAG + Graph            │
+     │                                                       ├── pass ─▶ persist ─▶ END
+     │                                                       ├── retry_count = 0
+     │                                                       │   └── retry_count := 1 ─▶ synthesize
+     │                                                       └── retry_count ≥ 1
+     │                                                           └── persist_with_warning ─▶ END
+     │
+     └── mode = recommend ───▶ generate_candidates
+                                │
+                                ├── for each candidate:
+                                │   estimation ─▶ synthesize ─▶ critic_check
+                                │   save result to candidate_results[]
+                                │
+                                └── after all candidates:
+                                    rank_and_select ─▶ persist ─▶ END
 ```
 
 ### 3.3 Описание узлов
