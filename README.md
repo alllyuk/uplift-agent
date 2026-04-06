@@ -1,27 +1,5 @@
 # Uplift Agent
 
-> Агент, который собирает данные о клиенте из нескольких источников, оценивает эффект интервенции и формирует объяснимую рекомендацию для банковских менеджеров.
-
-## Тех. стек
-
-- **Python 3.11** — основной язык
-- **LangGraph** — оркестрация агента (поверх LangChain)
-- **OpenAI API** (этап разработки) → собственные модели в контуре заказчика
-- **FAISS + sentence-transformers** (`intfloat/multilingual-e5-small`) — RAG / retrieval
-- **Streamlit** — UI для демо
-- **Loguru** — структурированное логирование
-
-## Архитектура
-
-- [System Design](docs/system-design.md) — архитектурный документ
-- [C4 Context](docs/diagrams/c4-context.md) — система, пользователь, внешние сервисы
-- [C4 Container](docs/diagrams/c4-container.md) — внутренняя структура системы
-- [C4 Component](docs/diagrams/c4-component.md) — компоненты оркестратора
-- [Workflow](docs/diagrams/workflow.md) — пошаговое выполнение запроса
-- [Data Flow](docs/diagrams/data-flow.md) — потоки данных
-
----
-
 Агент для построения решений по клиентским интервенциям в банке. Помогает оценить, стоит ли применять конкретную интервенцию к клиенту, и объясняет ожидаемый эффект на основе нескольких источников данных и количественных инструментов.
 
 ## Что за задача
@@ -86,6 +64,24 @@ PoC принимает кейс по клиенту и работает в од�
 - умеет отказываться от рекомендации при слабом качестве данных.
 
 LLM в проекте отвечает за оркестрацию и объяснения, но не за вычисление эффекта и не за исполнение бизнес-правил.
+
+## Тех. стек
+
+- **Python 3.11** — основной язык
+- **LangGraph** — оркестрация агента (поверх LangChain)
+- **OpenAI API** (этап разработки) → собственные модели в контуре заказчика
+- **FAISS + sentence-transformers** (`intfloat/multilingual-e5-small`) — RAG / retrieval
+- **Streamlit** — UI для демо
+- **Loguru** — структурированное логирование
+
+## Архитектура
+
+- [System Design](docs/system-design.md) — архитектурный документ
+- [C4 Context](docs/diagrams/c4-context.md) — система, пользователь, внешние сервисы
+- [C4 Container](docs/diagrams/c4-container.md) — внутренняя структура системы
+- [C4 Component](docs/diagrams/c4-component.md) — компоненты оркестратора
+- [Workflow](docs/diagrams/workflow.md) — пошаговое выполнение запроса
+- [Data Flow](docs/diagrams/data-flow.md) — потоки данных
 
 ## Репозиторий
 
