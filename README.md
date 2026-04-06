@@ -5,7 +5,7 @@
 ## Тех. стек
 
 - **Python 3.11** — основной язык
-- **LangChain** — оркестрация агента
+- **LangGraph** — оркестрация агента (поверх LangChain)
 - **OpenAI API** (этап разработки) → собственные модели в контуре заказчика
 - **FAISS + sentence-transformers** (`intfloat/multilingual-e5-small`) — RAG / retrieval
 - **Streamlit** — UI для демо
@@ -13,9 +13,12 @@
 
 ## Архитектура
 
-> Диаграмма будет добавлена в Milestone 2.
-
-![Architecture](docs/diagrams/architecture.png)
+- [System Design](docs/system-design.md) — архитектурный документ
+- [C4 Context](docs/diagrams/c4-context.md) — система, пользователь, внешние сервисы
+- [C4 Container](docs/diagrams/c4-container.md) — внутренняя структура системы
+- [C4 Component](docs/diagrams/c4-component.md) — компоненты оркестратора
+- [Workflow](docs/diagrams/workflow.md) — пошаговое выполнение запроса
+- [Data Flow](docs/diagrams/data-flow.md) — потоки данных
 
 ---
 
