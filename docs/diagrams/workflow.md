@@ -9,29 +9,13 @@ stateDiagram-v2
     [*] --> intake
 
     intake --> load_context : request parsed
-    intake --> persist_aborted : parse error
+    intake --> persist_aborted : parse error / missing intervention
 
     load_context --> policy_check : context loaded
     load_context --> persist_aborted : client not found
 
-    policy_check --> recommend_loop : recommend mode
-    policy_check --> estimation : evaluate mode
+    policy_check --> estimation : allowed case
     policy_check --> persist_aborted : blocked by policy
-
-    state recommend_loop {
-        [*] --> generate_candidates
-        generate_candidates --> evaluate_candidate : next candidate
-        state evaluate_candidate {
-            [*] --> estimation_i
-            estimation_i --> synthesize_i
-            synthesize_i --> critic_i
-            critic_i --> [*]
-        }
-        evaluate_candidate --> rank_and_select : all candidates processed
-        rank_and_select --> [*]
-    }
-
-    recommend_loop --> persist_done : candidate selected
 
     state estimation {
         [*] --> psm_compute

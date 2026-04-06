@@ -20,7 +20,7 @@ DAG причинно-следственных связей между призн
 
 ### ADR-5: SQLite для хранения кейсов
 
-Одна таблица `cases`: case_id, mode, client_id, request/context/result как JSON, status, trace_id, timestamps. PoC-масштаб, минимум инфраструктуры. Используется также для cooldown-проверки в policy_check.
+Одна таблица `cases`: case_id, client_id, request/context/result как JSON, status, trace_id, timestamps. PoC-масштаб, минимум инфраструктуры. Используется также для cooldown-проверки в policy_check.
 
 ### ADR-6: LangSmith (free tier) + Loguru
 
@@ -36,16 +36,15 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 | # | Модуль | Роль | Реализация |
 |---|--------|------|------------|
-| 1 | Case Intake & Router | Приём запроса, определение mode/client_id | LangGraph node. Few-shot LLM для NL, прямое заполнение для Streamlit. |
+| 1 | Case Intake & Router | Приём запроса, определение client_id и intervention_delta | LangGraph node. Few-shot LLM для NL, прямое заполнение для Streamlit. |
 | 2 | Client Context Retriever | Загрузка профиля из CSV | LangGraph node. 25 полей по client_id. |
 | 3 | Policy & Eligibility | Блокировка невалидных интервенций | LangGraph node. Rule-based: дубликаты, лимиты, cooldown. |
-| 4 | Candidate Generator | Список кандидатов (recommend mode) | LangGraph node. Получает список допустимых интервенций для клиента. |
-| 5 | Causal Estimation | PSM: ATE/ATT | LangGraph tool node. Greedy 1:1 matching, caliper, auto-detect. |
-| 6 | Causal Graph | Причинно-следственные связи между признаками | LangGraph tool node. Загрузка DAG из JSON, фильтрация по confidence → DSL для промпта. |
-| 7 | Evidence Retrieval | RAG: поиск банковских документов | LangGraph tool node. FAISS + e5-small, top_k. |
-| 8 | Critic / Guardrail | Пост-генерационные проверки | LangGraph node. 5 rule-based проверок. |
-| 9 | Recommendation Synthesizer | Генерация Explanation через LLM | LangGraph node. Промпт-шаблоны + JSON/text fallback. |
-| 10 | Case State & Memory | Персистентность кейсов | SQLite `cases`. Audit + cooldown. |
+| 4 | Causal Estimation | PSM: ATE/ATT | LangGraph tool node. Greedy 1:1 matching, caliper, auto-detect. |
+| 5 | Causal Graph | Причинно-следственные связи между признаками | LangGraph tool node. Загрузка DAG из JSON, фильтрация по confidence → DSL для промпта. |
+| 6 | Evidence Retrieval | RAG: поиск банковских документов | LangGraph tool node. FAISS + e5-small, top_k. |
+| 7 | Critic / Guardrail | Пост-генерационные проверки | LangGraph node. 5 rule-based проверок. |
+| 8 | Intervention Synthesizer | Генерация Explanation через LLM | LangGraph node. Промпт-шаблоны + JSON/text fallback. |
+| 9 | Case State & Memory | Персистентность кейсов | SQLite `cases`. Audit + cooldown. |
 
 ---
 
@@ -55,7 +54,7 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 Все данные между узлами LangGraph передаются через единый `CaseState`. На уровне системного дизайна важны 5 групп полей:
 
-- **Идентификация:** `case_id`, `mode`, `client_id`, `raw_query`
+- **Идентификация:** `case_id`, `client_id`, `raw_query`
 - **Контекст кейса:** `client_context`, `intervention_delta`
 - **Промежуточные результаты:** `policy_result`, `psm_result`, `rag_chunks`, `graph_dsl`
 - **Финальный ответ и контроль качества:** `explanation`, `critic_result`, `retry_count`
@@ -70,7 +69,7 @@ START
   │
   ▼
 ┌──────────────┐
-│ intake       │  Парсинг запроса: mode, client_id, delta
+│ intake       │  Парсинг запроса: client_id, delta
 └────┬─────────┘
      ▼
 ┌──────────────┐
@@ -82,22 +81,13 @@ START
 └────┬─────────┘
      ├── blocked ─────────────▶ abort ─▶ persist ─▶ END
      │
-     ├── mode = evaluate ─────▶ estimation ─▶ synthesize ─▶ critic_check
-     │                          PSM + RAG + Graph            │
-     │                                                       ├── pass ─▶ persist ─▶ END
-     │                                                       ├── retry_count = 0
-     │                                                       │   └── retry_count := 1 ─▶ synthesize
-     │                                                       └── retry_count ≥ 1
-     │                                                           └── persist_with_warning ─▶ END
-     │
-     └── mode = recommend ───▶ generate_candidates
-                                │
-                                ├── for each candidate:
-                                │   estimation ─▶ synthesize ─▶ critic_check
-                                │   save result to candidate_results[]
-                                │
-                                └── after all candidates:
-                                    rank_and_select ─▶ persist ─▶ END
+     └── allowed ─────────────▶ estimation ─▶ synthesize ─▶ critic_check
+                                PSM + RAG + Graph            │
+                                                              ├── pass ─▶ persist ─▶ END
+                                                              ├── retry_count = 0
+                                                              │   └── retry_count := 1 ─▶ synthesize
+                                                              └── retry_count ≥ 1
+                                                                  └── persist_with_warning ─▶ END
 ```
 
 ### 3.3 Описание узлов
@@ -106,7 +96,6 @@ START
 
 **Ключевые моменты:**
 - **policy_check** включает cooldown через SQLite (30 дней). При недоступности SQLite — fail-open с `requires_human_review = True`.
-- **generate_candidates** (recommend mode) — получает список допустимых интервенций для клиента, для каждого кандидата полный цикл estimation → synthesize → critic. Ранжирование по `att` desc.
 - **estimation** — параллельный запуск PSM + RAG + Graph. Каждый может fail независимо → degraded mode.
 - **critic_check** — 5 rule-based проверок. Макс. 1 retry.
 
@@ -114,7 +103,7 @@ START
 
 ## 4. State / Memory
 
-`CaseState` живёт в памяти LangGraph только на время одного кейса. Агент не использует прошлые кейсы как memory для новых рекомендаций; SQLite нужен для audit trail и cooldown safety-check.
+`CaseState` живёт в памяти LangGraph только на время одного кейса. Агент не использует прошлые кейсы как memory для новых оценок; SQLite нужен для audit trail и cooldown safety-check.
 
 Ключевые решения:
 - **Персистентность:** одна таблица `cases` в SQLite для результата кейса, статуса, review-маркеров и `trace_id`
@@ -127,7 +116,7 @@ START
 
 ## 5. Источники данных для estimation
 
-Три параллельных источника обогащают recommendation pipeline:
+Три параллельных источника обогащают pipeline оценки интервенции:
 
 - **PSM:** числовая оценка эффекта интервенции (`ATE`, `ATT`, `n_pairs`)
 - **Причинно-следственный граф:** структурный контекст о связях между признаками
@@ -159,7 +148,7 @@ START
 Safe failure policy:
 - максимум `1` retry на этапе synthesis после critic fail;
 - при неустранимой ошибке или слабой уверенности выставляется `requires_human_review = True`;
-- типовые триггеры: `status == degraded`, `|ATT| < 0.001` при слабых данных, critic fail после retry, отсутствие валидных кандидатов, недоступность SQLite при cooldown.
+- типовые триггеры: `status == degraded`, `|ATT| < 0.001` при слабых данных, critic fail после retry, недоступность SQLite при cooldown.
 
 Полный набор failure modes, critic-checks и observability-метрик вынесен в `specs/observability-evals.md` и `governance.md`.
 

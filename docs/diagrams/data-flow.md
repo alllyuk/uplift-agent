@@ -22,7 +22,7 @@ flowchart TD
         CONTEXT["Context Loader"]
         POLICY["Policy Check"]
         EVIDENCE["Estimation Layer"]
-        SYNTH["Recommendation Synthesizer"]
+        SYNTH["Intervention Synthesizer"]
         CRITIC["Critic / Guardrail"]
         RESULT["Final Result"]
     end
@@ -74,7 +74,7 @@ flowchart TD
 
 | Этап | Данные | Формат | Размер |
 |------|--------|--------|--------|
-| Input | `{client_id, mode, intervention_delta}` или NL-запрос | JSON / text | ~0.1-0.2 KB |
+| Input | `{client_id, intervention_delta}` или NL-запрос | JSON / text | ~0.1-0.2 KB |
 | Client Context | Профиль клиента и признаки | Dict -> JSON | ~1 KB |
 | Policy Result | `{blocked, reasons, notes}` | Dict | ~0.2 KB |
 | Evidence Bundle | `psm_result + rag_chunks + graph_dsl` | Mixed | ~6-7 KB |

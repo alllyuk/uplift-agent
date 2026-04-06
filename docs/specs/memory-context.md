@@ -19,7 +19,7 @@
 
 ### 2.1 Кросс-кейсовая память
 
-Агент **не использует** результаты прошлых кейсов для генерации новых рекомендаций. Каждый кейс обрабатывается независимо — прошлые Explanation не влияют на новые.
+Агент **не использует** результаты прошлых кейсов для генерации новых оценок. Каждый кейс обрабатывается независимо — прошлые Explanation не влияют на новые.
 
 **Исключение:** SQLite audit log используется для операционной проверки cooldown в policy_check (§3.3) — запрет повторной интервенции того же типа для клиента в течение 30 дней. Это safety-механизм, а не агентская память.
 
@@ -33,7 +33,6 @@
 CREATE TABLE IF NOT EXISTS cases (
     case_id       TEXT PRIMARY KEY,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    mode          TEXT NOT NULL,
     client_id     TEXT NOT NULL,
     raw_query     TEXT,
     request_json  TEXT NOT NULL,          -- JSON: intervention_delta

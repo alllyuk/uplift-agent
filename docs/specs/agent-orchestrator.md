@@ -10,7 +10,6 @@ LangGraph Orchestrator — центральный компонент. Управ
 class CaseState(TypedDict):
     # Идентификация
     case_id: str                                    # UUID
-    mode: Literal["evaluate", "recommend"]
     client_id: str                                  # "C000005"
     raw_query: Optional[str]                        # NL-запрос (если есть)
 
@@ -33,10 +32,6 @@ class CaseState(TypedDict):
     critic_result: dict                             # {passed, issues}
     retry_count: int                                # 0 или 1
 
-    # Recommend mode
-    candidate_results: Optional[list[dict]]         # [{delta, psm_result, explanation, critic_result}, ...]
-    selected_candidate: Optional[dict]              # лучший кандидат
-
     # Human review
     requires_human_review: bool
     review_reason: Optional[str]
@@ -52,10 +47,10 @@ class CaseState(TypedDict):
 
 ### 3.1 intake
 
-- **Structured input** (Streamlit) → прямое заполнение `mode`, `client_id`, `intervention_delta`
-- **NL-запрос** → few-shot LLM prompt → `ParsedQuery` (client_id, intent, delta, match_info)
+- **Structured input** (Streamlit) → прямое заполнение `client_id`, `intervention_delta`
+- **NL-запрос** → few-shot LLM prompt → `ParsedQuery` (client_id, delta, match_info)
 - Генерация `case_id` (UUID4), `retry_count = 0`
-- Ошибка парсинга → abort с `parse_error`
+- Ошибка парсинга или отсутствие интервенции → abort с `parse_error` / `missing_intervention`
 
 ### 3.2 load_context
 
@@ -74,18 +69,9 @@ Rule-based проверки допустимости:
 
 Результат: `{blocked: bool, reasons: [str], notes: dict}`
 
-**Переходы:** `blocked` → abort | `mode == "recommend"` → generate_candidates | `mode == "evaluate"` → estimation
+**Переходы:** `blocked` → abort | иначе → estimation
 
-### 3.4 generate_candidates (только recommend)
-
-1. Получение списка допустимых интервенций для клиента на основе его профиля и policy-правил
-2. Для каждого кандидата: estimation → synthesize → critic
-3. Результаты в `candidate_results[]`: `{delta, psm_result, explanation, critic_result}`
-4. Ранжирование: по `psm_result.att` (desc), приоритет `critic_result.passed == True`
-5. Кандидаты с неустранёнными issues отбраковываются (причина в `rejection_reason`)
-6. Победитель → `selected_candidate`, его данные копируются в основные поля CaseState
-
-### 3.5 estimation (параллельный)
+### 3.4 estimation (параллельный)
 
 Три sub-task через LangGraph parallel branching:
 
@@ -95,9 +81,9 @@ Rule-based проверки допустимости:
 | **RAG** | query из delta или raw_query, top_k=3 | `list[str]` чанков | `rag_chunks = []` |
 | **Graph DSL** | graph_method, min_conf | DSL-строка рёбер | `graph_dsl = ""` |
 
-### 3.6 synthesize
+### 3.5 synthesize
 
-1. Выбор шаблона промпта (evaluate / recommend)
+1. Выбор шаблона промпта для оценки заданной интервенции
 2. Заполнение: контекст клиента, delta, PSM-summary, RAG-чанки, Graph DSL
 3. При retry: добавление "ИСПРАВЬТЕ СЛЕДУЮЩИЕ ПРОБЛЕМЫ: {issues}"
 4. LLM вызов: JSON mode → text fallback → regex-парсинг
@@ -105,7 +91,7 @@ Rule-based проверки допустимости:
 
 Ошибка: LLM timeout после retry → abort с `llm_timeout`.
 
-### 3.7 critic_check
+### 3.6 critic_check
 
 5 rule-based проверок (подробнее в `observability-evals.md`):
 1. Числовая консистентность ATT/ATE
@@ -116,7 +102,7 @@ Rule-based проверки допустимости:
 
 **Переходы:** pass → persist | fail + `retry_count == 0` → `retry_count := 1`, synthesize | fail + `retry_count >= 1` → persist_with_warning
 
-### 3.8 persist
+### 3.7 persist
 
 1. Вычисление `latency_ms`
 2. Определение `status`: done / aborted / degraded
@@ -124,7 +110,6 @@ Rule-based проверки допустимости:
    - `status == "degraded"` (tool fails)
    - Critic fail после retry
    - `|ATT| < 0.001` и мало matched pairs
-   - Все кандидаты отбракованы (recommend mode)
    - SQLite был недоступен при cooldown-проверке
 4. INSERT в SQLite (если доступен), логирование через Loguru
 
@@ -146,9 +131,9 @@ Rule-based проверки допустимости:
 ## 6. Промпт-менеджмент
 
 - **prompt_base**: базовый анализ. System: роль + инструкции + JSON-схема. User: профиль + признаки + граф.
-- **prompt_whatif**: what-if. Дополнительно: delta, PSM-summary, RAG-чанки, match_info.
+- **prompt_whatif**: оценка заданной интервенции. Дополнительно: delta, PSM-summary, RAG-чанки, match_info.
 - Шаблоны: `ChatPromptTemplate.from_messages()` с переменными `{context}`, `{features_description}`, `{graph_block}`, `{what_if_block}`, `{psm_block}`, `{rag_context}`.
 
 ## 7. QueryParser
 
-Few-shot LLM prompt для парсинга NL-запроса → `ParsedQuery`: client_id, intent (evaluate/recommend), delta, match_info (маркер "similar" для неточных совпадений).
+Few-shot LLM prompt для парсинга NL-запроса → `ParsedQuery`: client_id, delta, match_info (маркер "similar" для неточных совпадений). Если интервенция не извлекается надёжно, кейс не запускается.

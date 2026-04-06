@@ -42,7 +42,7 @@ logger.add(
 ### 2.2 Пример
 
 ```
-2026-04-06 14:30:01 | INFO | orchestrator:intake:45 | case_id=abc123 mode=evaluate
+2026-04-06 14:30:01 | INFO | orchestrator:intake:45 | case_id=abc123 client_id=C000005
 2026-04-06 14:30:02 | INFO | orchestrator:policy_check:78 | case_id=abc123 blocked=false
 2026-04-06 14:30:05 | INFO | psm_tool:compute:32 | case_id=abc123 ate=0.023 n_pairs=412
 2026-04-06 14:30:07 | INFO | rag_tool:query:18 | case_id=abc123 top_k=3 chunks_found=3
@@ -55,7 +55,7 @@ logger.add(
 
 | Событие | Уровень | Данные |
 |---------|---------|--------|
-| Запуск кейса | INFO | case_id, mode |
+| Запуск кейса | INFO | case_id, client_id |
 | Policy decision | INFO | case_id, blocked, reasons count |
 | PSM result | INFO | case_id, ok, ate, att, n_pairs |
 | RAG query | INFO | case_id, query (truncated), chunks_found |
