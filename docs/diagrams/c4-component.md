@@ -1,50 +1,47 @@
 # C4 Component: Agent Service
 
-Внутреннее устройство `Agent Service` — основные компоненты исполнения кейса и их связи.
+Внутреннее устройство Agent Service — компоненты исполнения кейса.
 
 ```mermaid
-C4Component
-    title Компонентная диаграмма — Agent Service
+flowchart TD
+    subgraph agent ["Agent Service"]
+        intake["Intake & Router"]
+        context["Context Loader"]
+        policy["Policy Checker"]
+        estimation["Estimation Layer\nPSM + RAG + Graph"]
+        synth["Intervention Synthesizer"]
+        critic["Critic / Guardrail"]
+        persist["Case Persister"]
+    end
 
-    Container_Boundary(agent, "Agent Service") {
-        Component(intake, "Intake & Router", "LangGraph node", "Разбирает вход и инициализирует кейс.")
+    intake --> context
+    context --> policy
+    policy -- "allowed" --> estimation
+    policy -- "blocked" --> persist
+    estimation --> synth
+    synth --> critic
+    critic -- "pass" --> persist
+    critic -- "retry" --> synth
 
-        Component(context, "Context Loader", "LangGraph node", "Загружает профиль клиента.")
-
-        Component(policy, "Policy Checker", "Rule-based node", "Проверяет eligibility и cooldown.")
-
-        Component(estimation, "Estimation Layer", "Tool coordinator", "Собирает effect и evidence:<br/>PSM, retrieval и graph lookup.")
-
-        Component(synth, "Intervention Synthesizer", "LLM node", "Формирует итоговый ответ по заданной интервенции.")
-
-        Component(critic, "Critic / Guardrail", "Rule-based node", "Проверяет числа, источники<br/>и уровень уверенности.")
-
-        Component(persist, "Case Persister", "Persistence node", "Сохраняет результат и финальный статус.")
-    }
-
-    Rel(intake, context, "client_id + intervention_delta")
-    Rel(context, policy, "client context")
-    Rel(policy, estimation, "allowed case")
-    Rel(estimation, synth, "effect + evidence")
-    Rel(synth, critic, "draft answer")
-    Rel(critic, synth, "retry with issues")
-    Rel(critic, persist, "approved / degraded")
-    Rel(policy, persist, "blocked case")
-
-    UpdateRelStyle(critic, synth, $offsetX="40", $offsetY="-20")
-    UpdateRelStyle(policy, persist, $offsetX="-20", $offsetY="20")
+    style intake fill:#438DD5,color:#fff
+    style context fill:#438DD5,color:#fff
+    style policy fill:#438DD5,color:#fff
+    style estimation fill:#438DD5,color:#fff
+    style synth fill:#438DD5,color:#fff
+    style critic fill:#438DD5,color:#fff
+    style persist fill:#438DD5,color:#fff
 ```
 
 ## Интерфейсы компонентов
 
-| Компонент | Входные поля из CaseState | Выходные поля в CaseState |
-|-----------|--------------------------|---------------------------|
+| Компонент | Входы из CaseState | Выходы в CaseState |
+|-----------|-------------------|---------------------|
 | Intake & Router | `raw_query` или structured input | `case_id`, `client_id`, `intervention_delta` |
 | Context Loader | `client_id` | `client_context` |
 | Policy Checker | `client_context`, `intervention_delta` | `policy_result` |
 | Estimation Layer | `client_context`, `intervention_delta` | `psm_result`, `rag_chunks`, `graph_dsl` |
 | Intervention Synthesizer | Контекст кейса и evidence | `explanation` |
 | Critic / Guardrail | `explanation` и evidence | `critic_result`, `retry_count` |
-| Case Persister | Полное состояние кейса | финальный `status`, `latency_ms`, запись в SQLite |
+| Case Persister | Полное состояние кейса | `status`, `latency_ms`, запись в SQLite |
 
-> `CaseState` используется как общий транспорт состояния между узлами, но не выделяется в отдельный компонент на диаграмме, чтобы не перегружать схему.
+> `CaseState` — общий транспорт между узлами, не показан как отдельный компонент чтобы не перегружать схему.

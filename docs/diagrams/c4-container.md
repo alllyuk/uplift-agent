@@ -1,38 +1,40 @@
 # C4 Container: Uplift Agent
 
-Внутренняя структура системы: контейнеры (процессы, хранилища, UI) и их взаимодействие.
+Внутренняя структура системы: контейнеры, хранилища и внешние зависимости.
 
 ```mermaid
-C4Container
-    title Контейнерная диаграмма — Uplift Agent
+flowchart TB
+    analyst["👤 Аналитик"]
 
-    Person(analyst, "Банковский аналитик")
+    subgraph uplift ["Uplift Agent"]
+        ui["Web UI\nStreamlit"]
+        agent["Agent Service\nLangGraph"]
+        clientdata[("Client Data\nCSV / Parquet")]
+        retrieval[("Retrieval Store\nFAISS / Parquet")]
+        cases[("Case Store\nSQLite")]
+    end
 
-    System_Boundary(uplift, "Uplift Agent") {
-        Container(ui, "Web UI", "Streamlit", "Запуск кейсов и просмотр результатов.")
+    openai["☁️ OpenAI API"]
+    langsmith["☁️ LangSmith"]
 
-        Container(agent, "Agent Service", "Python / LangGraph", "Оркестрация кейса, policy-check,<br/>tool calls, synthesis и guardrails.")
+    analyst -- "HTTP/Browser" --> ui
+    ui -- "In-process" --> agent
+    agent -- "File I/O" --> clientdata
+    agent -- "Local retrieval" --> retrieval
+    agent -- "SQLite" --> cases
+    agent -- "HTTPS" --> openai
+    agent -- "HTTPS" --> langsmith
 
-        ContainerDb(clientdata, "Client Data", "CSV / Parquet", "Профили клиентов и признаки<br/>для оценки интервенций.")
-
-        ContainerDb(retrieval, "Retrieval Store", "FAISS / Parquet", "Индекс, embeddings и chunks<br/>банковского корпуса.")
-
-        ContainerDb(cases, "Case Store", "SQLite", "Кейсы, статусы, audit<br/>и cooldown-history.")
-    }
-
-    System_Ext(openai, "OpenAI API")
-    System_Ext(langsmith, "LangSmith")
-
-    Rel(analyst, ui, "Запускает кейсы", "HTTP/Browser")
-    Rel(ui, agent, "Передаёт запрос и получает результат", "In-process")
-    Rel(agent, clientdata, "Читает профиль клиента", "File I/O")
-    Rel(agent, retrieval, "Ищет evidence", "Local retrieval")
-    Rel(agent, cases, "Читает и сохраняет кейсы", "SQLite")
-    Rel(agent, openai, "Вызовы LLM", "HTTPS")
-    Rel(agent, langsmith, "Трейсы", "HTTPS")
+    style ui fill:#438DD5,color:#fff
+    style agent fill:#438DD5,color:#fff
+    style clientdata fill:#438DD5,color:#fff
+    style retrieval fill:#438DD5,color:#fff
+    style cases fill:#438DD5,color:#fff
+    style openai fill:#999,color:#fff
+    style langsmith fill:#999,color:#fff
 ```
 
-## Потоки данных между контейнерами
+## Потоки данных
 
 | От | К | Данные | Протокол |
 |----|---|--------|----------|

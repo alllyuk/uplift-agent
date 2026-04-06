@@ -1,30 +1,32 @@
 # C4 Context: Uplift Agent
 
-Диаграмма верхнего уровня — система, пользователь, внешние сервисы и границы.
+Диаграмма верхнего уровня — система, пользователь, внешние сервисы.
 
 ```mermaid
-C4Context
-    title Контекстная диаграмма — Uplift Agent
+flowchart TB
+    analyst["👤 Банковский аналитик"]
 
-    Person(analyst, "Банковский аналитик", "Запускает кейсы и читает рекомендации.")
+    uplift["🟦 Uplift Agent\nPoC-система поддержки решений\nпо клиентским интервенциям"]
 
-    System(uplift, "Uplift Agent", "PoC-система поддержки решений<br/>по клиентским интервенциям.")
+    openai["☁️ OpenAI API"]
+    langsmith["☁️ LangSmith"]
 
-    System_Ext(openai, "OpenAI API", "LLM для парсинга запросов<br/>и синтеза ответа.")
-    System_Ext(langsmith, "LangSmith", "Трейсы и мониторинг выполнения.")
+    analyst -- "Streamlit UI / CLI" --> uplift
+    uplift -- "HTTPS" --> openai
+    uplift -- "HTTPS" --> langsmith
 
-    Rel(analyst, uplift, "Запускает анализ и получает отчёт", "Streamlit UI / CLI")
-    Rel(uplift, openai, "Вызовы LLM", "HTTPS")
-    Rel(uplift, langsmith, "Отправляет трейсы", "HTTPS")
+    style uplift fill:#438DD5,color:#fff
+    style openai fill:#999,color:#fff
+    style langsmith fill:#999,color:#fff
 ```
 
-## Описание участников
+## Участники
 
 | Участник | Тип | Описание |
 |----------|-----|----------|
-| Банковский аналитик | Person | Пользователь PoC, который запускает кейсы и читает рекомендации. |
-| Uplift Agent | System | Ядро системы: orchestration, tool calls, guardrails и финальный отчёт. |
-| OpenAI API | External System | Внешний LLM-провайдер для разбора запроса и синтеза ответа. |
-| LangSmith | External System | Трейсинг и наблюдаемость выполнения пайплайна. |
+| Банковский аналитик | Person | Пользователь PoC. Запускает кейсы и читает рекомендации. |
+| Uplift Agent | System | Ядро: orchestration, tool calls, guardrails, финальный отчёт. Включает локальные данные (CSV клиентов, FAISS-индекс, SQLite). |
+| OpenAI API | External | LLM для парсинга запросов и синтеза ответа. |
+| LangSmith | External | Трейсинг и наблюдаемость выполнения пайплайна. |
 
-> **Примечание:** Локальные данные и хранилища (CSV клиентов, retrieval-артефакты, SQLite) намеренно опущены на context-уровне и раскрываются в [C4 Container](c4-container.md).
+> Локальные хранилища (CSV, FAISS, SQLite) — часть системы. Детализация — в [C4 Container](c4-container.md).
