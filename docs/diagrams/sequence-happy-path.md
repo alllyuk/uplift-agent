@@ -7,55 +7,31 @@ Sequence diagram для основного сценария «оценка за�
 ```mermaid
 sequenceDiagram
     actor Analyst as 👤 Аналитик
-    participant UI as Streamlit UI
-    participant Orch as LangGraph Orchestrator
-    participant CSV as Client Data (CSV)
-    participant Policy as Policy Checker
-    participant DB as SQLite (cases)
-    participant PSM as PSM Tool
-    participant RAG as RAG (FAISS)
-    participant Graph as Graph DSL Loader
-    participant Synth as Synthesizer
+    participant Agent as Agent Service<br/>(LangGraph)
+    participant Tools as Local Tools<br/>(PSM, RAG, Graph)
+    participant DB as SQLite
     participant LLM as OpenAI API
-    participant Critic as Critic / Guardrail
-    participant Persist as Persister
 
-    Analyst->>UI: client_id + intervention_delta
-    UI->>Orch: запуск кейса
-    Orch->>Orch: intake (генерация case_id)
-    Orch->>CSV: load_context(client_id)
-    CSV-->>Orch: client_context (25 полей)
+    Analyst->>Agent: client_id + intervention_delta
+    Agent->>Agent: intake → load_context → policy_check
+    Agent->>DB: cooldown lookup
+    DB-->>Agent: allowed
 
-    Orch->>Policy: check(context, delta)
-    Policy->>DB: cooldown lookup (client_id, type, 30d)
-    DB-->>Policy: no recent intervention
-    Policy-->>Orch: allowed
-
-    par estimation (параллельно)
-        Orch->>PSM: run(df, treatment from delta)
-        PSM-->>Orch: {ok, ate, att, n_pairs}
+    par estimation параллельно
+        Agent->>Tools: PSM
     and
-        Orch->>RAG: query(top_k=3)
-        RAG-->>Orch: chunks[]
+        Agent->>Tools: RAG
     and
-        Orch->>Graph: load_dsl(method, min_conf)
-        Graph-->>Orch: graph_dsl
+        Agent->>Tools: Graph DSL
     end
+    Tools-->>Agent: evidence bundle
 
-    Orch->>Synth: synthesize(context, delta, evidence)
-    Synth->>LLM: prompt (JSON mode)
-    LLM-->>Synth: explanation JSON
-    Synth-->>Orch: explanation
+    Agent->>LLM: synthesize prompt
+    LLM-->>Agent: explanation JSON
+    Agent->>Agent: critic check (passed)
 
-    Orch->>Critic: check 5 rules
-    Critic-->>Orch: passed=true
-
-    Orch->>Persist: save(state)
-    Persist->>DB: INSERT case
-    Persist-->>Orch: status=done, latency_ms
-
-    Orch-->>UI: финальный ответ
-    UI-->>Analyst: explanation + PSM + sources
+    Agent->>DB: persist case
+    Agent-->>Analyst: explanation + sources
 ```
 
 ## Что покрывает диаграмма
