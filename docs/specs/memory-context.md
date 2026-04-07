@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS cases (
     review_reason TEXT,
     trace_id      TEXT,                   -- LangSmith trace ID
     latency_ms    INTEGER,
+    prompt_versions_json TEXT,            -- JSON: {"base": "v1.0", "whatif": "v2.1"}
+    experiment_variant TEXT,              -- "A" | "B" | NULL — A/B-эксперимент, см. observability-evals §5
     updated_at    TIMESTAMP
 );
 

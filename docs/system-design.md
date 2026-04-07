@@ -168,3 +168,42 @@ Safe failure policy:
 | Embedding model | `multilingual-e5-small` | Фиксирован |
 | Синтетических клиентов | 3000 | Достаточно для PSM |
 | RAG-корпус | 50 документов | Основные банковские темы |
+
+---
+
+## 9. Масштабирование за пределы PoC
+
+Раздел описывает ориентиры миграции PoC → production. Цель — показать, что текущая архитектура не блокирует рост, а ограничения §8 — сознательный выбор для PoC, а не архитектурный долг.
+
+### 9.1 Текущий PoC
+
+Single-user, in-process Streamlit, SQLite (single-writer), FAISS in-memory, один LLM API key, 3000 синтетических клиентов, 50 RAG-документов.
+
+### 9.2 Узкие места и решения
+
+| Компонент | PoC | Production |
+|-----------|-----|------------|
+| Agent Service | in-process | Stateless + N воркеров за load balancer (FastAPI/uvicorn) |
+| Кейсы | sync HTTP | Async через очередь (Celery / RQ + Redis broker) |
+| Client Data | CSV | PostgreSQL + индексы по сегментам |
+| Case Store | SQLite | PostgreSQL (multi-writer, partitioning по `created_at`) |
+| Retrieval | FAISS in-memory | Milvus / Weaviate (distributed, HNSW) |
+| LLM | один API key | Multi-key + provider abstraction (OpenAI / Anthropic / собственный inference) с fallback |
+| Observability | Loguru файлы | Loki / ELK + Prometheus + Grafana |
+| Secrets | `.env` | Vault / AWS Secrets Manager |
+
+### 9.3 Что НЕ масштабируется тривиально
+
+- **PSM:** greedy 1:1 matching — `O(n²)`, дорого при росте популяции до миллионов клиентов. Решение — approximate matching или предвычисленный propensity index.
+- **Cooldown-проверка:** требует индекс `(client_id, intervention_type, created_at)` и, при росте кейсов, денормализованную таблицу последних интервенций.
+
+### 9.4 Этапы миграции PoC → production
+
+1. Streamlit → REST API (см. `specs/rest-api.md`)
+2. SQLite → PostgreSQL (миграционный скрипт)
+3. CSV → PostgreSQL для клиентов
+4. Sync → async через очередь
+5. FAISS → Milvus / Weaviate
+6. Multi-worker deployment (Kubernetes / docker-compose)
+
+Каждый шаг — отдельная итерация; LangGraph и rule-based слои (Policy, Critic) переносятся без изменений.

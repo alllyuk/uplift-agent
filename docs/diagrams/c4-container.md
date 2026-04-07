@@ -38,7 +38,7 @@ flowchart TB
 
 | От | К | Данные | Протокол |
 |----|---|--------|----------|
-| Web UI | Agent Service | Запрос пользователя и итоговый результат | In-process |
+| Web UI | Agent Service | Запрос пользователя и итоговый результат | In-process (planned: REST API, см. `specs/rest-api.md`) |
 | Agent Service | Client Data | `client_id` → профиль клиента | File I/O |
 | Agent Service | Retrieval Store | `query` → top-k чанки | Local retrieval |
 | Agent Service | Case Store | Чтение cooldown-history и сохранение кейса | SQLite |

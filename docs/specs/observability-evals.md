@@ -118,7 +118,42 @@ Critic выполняется после каждой генерации LLM. В
 3. Если не пусто и `retry_count == 0` → инъекция issues в промпт, повторный synthesize
 4. Если не пусто и `retry_count >= 1` → `{passed: False, issues: [...]}`, статус `degraded`
 
-## 5. Health Checks
+## 5. A/B тестирование промптов и моделей
+
+### 5.1 Что сравнивается
+
+- **Версии промптов** — `prompt_version_base`, `prompt_version_whatif` (см. `agent-orchestrator.md` §6.2)
+- **LLM-модели** — через `LLM_MODEL_NAME` (например `gpt-4o-mini` vs `gpt-4o`)
+- **Параметры** — `temperature`, `top_k` для RAG
+
+### 5.2 Дизайн эксперимента
+
+- Конфигурация в `experiments.yaml`: `experiment_id`, `variant_a` (control), `variant_b` (treatment), `traffic_split`, `start_at`, `end_at`, `success_metric`
+- **Routing:** детерминированный split по `case_id` — `variant = "A" if hash(case_id) % 100 < split else "B"`. Без липкости по client (PoC обрабатывает кейсы независимо)
+- В `CaseState` пишутся `experiment_id` и `variant`; в SQLite — столбец `experiment_variant` (см. `memory-context.md` §3.1)
+
+### 5.3 Метрики сравнения
+
+Переиспользуются метрики из §1: % полезных рекомендаций, % галлюцинаций, RAGAS faithfulness, p95 latency, cost per case, critic pass rate.
+
+### 5.4 Анализ
+
+- SQL-сравнение `cases` по `experiment_variant` для фиксированного `experiment_id`
+- Минимальный размер выборки для PoC: `n ≥ 100` на вариант, простое сравнение средних
+- Решающий критерий: вариант B принимается, если `lift ≥ 5%` по основной метрике
+- Production: z-test для пропорций / t-test для непрерывных, power analysis — out of scope для PoC
+
+### 5.5 Жизненный цикл эксперимента
+
+`draft → running → analyzed → promoted | rolled-back`. Promotion = смена default-версии в `LLMConfig` + рестарт. Rollback = возврат предыдущей версии без удаления артефактов.
+
+### 5.6 PoC scope
+
+Фреймворк описан, реализация ограничена ручным запуском двух конфигураций сервиса и сравнением метрик из SQLite. Автоматический experiment runner — out of scope.
+
+---
+
+## 6. Health Checks
 
 | Компонент | Проверка при старте | При недоступности в runtime |
 |-----------|--------------------|-----------------------------|

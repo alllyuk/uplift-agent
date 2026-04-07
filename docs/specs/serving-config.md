@@ -35,7 +35,7 @@ class AppConfig(BaseSettings):
 |--------|--------------------|
 | **PathsConfig** | `project_root`, `artifacts_dir`, `rag_data_dir`, имена файлов (CSV, JSON, Parquet, FAISS) |
 | **DataGenerationConfig** | `n_clients` (3000), `seed` (42) |
-| **LLMConfig** | `model_name`, `temperature`, `confidence_threshold` (0.45), `bootstrap_rounds`, `sample_rows` |
+| **LLMConfig** | `model_name`, `temperature`, `confidence_threshold` (0.45), `bootstrap_rounds`, `sample_rows`, `prompt_version_base`, `prompt_version_whatif` |
 | **APIConfig** | `api_key`, `base_url`, `provider` (openai/local) |
 | **LoggingConfig** | `level`, `file_rotation` (10MB), `file_retention` (90 days) |
 | **StreamlitConfig** | `theme`, `page_title`, `page_icon` |

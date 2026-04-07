@@ -81,6 +81,7 @@ LLM в проекте отвечает за оркестрацию и объяс
 - [C4 Container](docs/diagrams/c4-container.md) — внутренняя структура системы
 - [C4 Component](docs/diagrams/c4-component.md) — компоненты оркестратора
 - [Workflow](docs/diagrams/workflow.md) — пошаговое выполнение запроса
+- [Sequence: Happy Path](docs/diagrams/sequence-happy-path.md) — sequence diagram основного успешного сценария
 - [Data Flow](docs/diagrams/data-flow.md) — потоки данных
 
 ## Репозиторий
@@ -89,5 +90,5 @@ LLM в проекте отвечает за оркестрацию и объяс
 - `docs/product-proposal.md` — продуктовая постановка, цель, метрики и сценарии использования
 - `docs/system-design.md` — обзор архитектуры PoC-системы
 - `docs/diagrams/` — C4-диаграммы, workflow и data flow
-- `docs/specs/` — детальные спецификации orchestrator, memory/context, retriever, tools/APIs, serving, observability
+- `docs/specs/` — детальные спецификации orchestrator, memory/context, retriever, tools/APIs, serving, observability, rest-api
 - `docs/governance.md` — риски, защита, логирование и работа с данными

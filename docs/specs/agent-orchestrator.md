@@ -41,6 +41,11 @@ class CaseState(TypedDict):
     trace_id: Optional[str]
     latency_ms: Optional[int]
     abort_reason: Optional[str]
+
+    # Версии промптов и A/B
+    prompt_versions: dict                           # {"base": "v1.0", "whatif": "v2.1"} — фактически использованные шаблоны
+    experiment_id: Optional[str]                    # ID A/B-эксперимента, если кейс попал под него
+    variant: Optional[str]                          # "A" | "B" внутри эксперимента
 ```
 
 ## 3. Узлы (nodes)
@@ -134,9 +139,20 @@ Rule-based проверки допустимости:
 
 ## 6. Промпт-менеджмент
 
+### 6.1 Шаблоны
+
 - **prompt_base**: базовый анализ. System: роль + инструкции + JSON-схема. User: профиль + признаки + граф.
 - **prompt_whatif**: оценка заданной интервенции. Дополнительно: delta, PSM-summary, RAG-чанки, match_info.
 - Шаблоны: `ChatPromptTemplate.from_messages()` с переменными `{context}`, `{features_description}`, `{graph_block}`, `{what_if_block}`, `{psm_block}`, `{rag_context}`.
+
+### 6.2 Версионирование
+
+- **Storage:** шаблоны лежат как файлы в `prompts/{name}/{version}.yaml` (например `prompts/whatif/v2.1.yaml`). YAML содержит `system`, `user`, и метаданные `version`, `created_at`, `parent_version`, `notes`.
+- **Naming:** семантическое `vMAJOR.MINOR`. MAJOR — несовместимое изменение схемы переменных, MINOR — текстовая правка.
+- **Активация:** активная версия выбирается через существующий `LLMConfig` (`specs/serving-config.md` §2.2) — поля `prompt_version_base`, `prompt_version_whatif`. По умолчанию — последний MAJOR.
+- **Логирование:** фактически использованные версии записываются в `CaseState.prompt_versions` и в SQLite (`cases.prompt_versions_json`) для аудита и воспроизводимости.
+- **Rollback:** смена версии в config + рестарт сервиса. Старые версии не удаляются — остаются в репозитории и могут быть включены обратно.
+- **PoC scope:** 2 шаблона (`base`, `whatif`), смена редкая, без автоматического prompt registry. Production-grade registry — out of scope.
 
 ## 7. QueryParser
 
