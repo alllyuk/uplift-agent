@@ -15,6 +15,9 @@
 | % галлюцинаций | < 10% | Critic + RAGAS faithfulness |
 | Консистентность текст/числа | > 95% | Critic check #1 |
 | Полнота рекомендаций | > 95% | Critic check #5 |
+| RAG refinement rate | < 30% | Доля кейсов с `rag_iterations >= 2` (см. §3.7 в `agent-orchestrator.md`) |
+| LLM-critic agreement с rule-based | > 80% | Доля кейсов, где `llm_issues == []` при `rule_issues == []` (см. §4.4) |
+| % кейсов с retry после rag_refine | < 25% | `SELECT count(*) FROM cases WHERE retry_count >= 1` |
 
 ### 1.2 Технические
 
@@ -97,9 +100,9 @@ LANGCHAIN_PROJECT=uplift-agent-poc
 | Evidence Usage | Использование предоставленных данных | 0/1/2 |
 | Risk Awareness | Упоминание рисков и ограничений | 0/1/2 |
 
-### 4.3 Critic Checks (rule-based)
+### 4.3 Critic Checks Level 1 (rule-based)
 
-Critic выполняется после каждой генерации LLM. Все проверки детерминированные, без LLM.
+Уровень 1 critic выполняется после каждой генерации LLM. Все проверки детерминированные, без LLM. Это **safety floor** — пропускает только синтаксически валидные ответы.
 
 **Check 1 — Числовая консистентность:** если в тексте ответа явно упоминаются ATT/ATE (паттерн `ATT =`, `ATE ≈` и т.п.), значения сравниваются с `psm_result` (tolerance 10%). Несовпадение → issue.
 
@@ -111,12 +114,34 @@ Critic выполняется после каждой генерации LLM. В
 
 **Check 5 — Полнота ответа:** обязательные поля Explanation (`drivers_pos`, `drivers_neg`, `expected_effect`) заполнены и содержат >= 10 символов.
 
-### 4.4 Стратегия при fail Critic
+### 4.4 Critic Checks Level 2 (LLM-augmented)
 
-1. Собрать все `issues` из 5 проверок
-2. Если пусто → `{passed: True, issues: []}`
-3. Если не пусто и `retry_count == 0` → инъекция issues в промпт, повторный synthesize
-4. Если не пусто и `retry_count >= 1` → `{passed: False, issues: [...]}`, статус `degraded`
+Запускается **только** если уровень 1 не нашёл блокирующих issues. LLM-критик проверяет смысловые аспекты, которые regex не видит. Это часть **гибридной агентности** (см. ADR-8 в `system-design.md`): rule-based — safety floor, LLM — soft layer для смысла.
+
+**LLM-prompt** просит вернуть JSON со списком issues по 4 категориям:
+
+| ID | Категория | Что проверяется |
+|----|-----------|-----------------|
+| L1 | Логическая консистентность | `drivers_pos` и `drivers_neg` не противоречат друг другу и совпадают по знаку с PSM ATT |
+| L2 | Соответствие фактам | Утверждения в `diagnosis` и `expected_effect` подкреплены evidence (PSM, RAG, Graph), нет необоснованных выводов |
+| L3 | Адекватность хеджирования | При слабых данных текст содержит явные оговорки о неопределённости (мягче, чем regex check 4 уровня 1) |
+| L4 | Полнота recommendations | `recommendations` адресуют именно тот intervention из delta, а не общие пожелания |
+
+**Контракт LLM-output:**
+```json
+{"llm_issues": [{"id": "L2", "field": "diagnosis", "note": "..."}, ...]}
+```
+
+При невалидном LLM-ответе или таймауте: `llm_issues = []` (fail-open, защита через rule-based уже есть).
+
+### 4.5 Стратегия при fail Critic
+
+1. Собрать `rule_issues` (уровень 1) и, если уровень 1 чист, `llm_issues` (уровень 2)
+2. Объединённый список → `issues`. Если пусто → `{passed: True}`
+3. Если не пусто и `retry_count == 0` → переход в `rag_refine` (см. `agent-orchestrator.md` §3.7), затем повторный `synthesize` с issues в промпте
+4. Если не пусто и `retry_count >= 1` → `{passed: False, issues: [...]}`, статус `degraded`, `requires_human_review = True`
+
+**Интерпретация:** rule_issues — hard fail (всегда блокируют), llm_issues — soft fail (тоже триггерят retry, но при невалидном LLM-ответе fail-open). Это соответствует принципу «safety не зависит от LLM».
 
 ## 5. A/B тестирование промптов и моделей
 

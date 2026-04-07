@@ -10,7 +10,8 @@ flowchart TD
         policy["Policy Checker"]
         estimation["Estimation Layer\nPSM + RAG + Graph"]
         synth["Intervention Synthesizer"]
-        critic["Critic / Guardrail"]
+        critic["Critic / Guardrail\nrule + LLM"]
+        rag_refine["RAG Refiner\nLLM-driven"]
         persist["Case Persister"]
     end
 
@@ -21,7 +22,9 @@ flowchart TD
     estimation --> synth
     synth --> critic
     critic -- "pass" --> persist
-    critic -- "retry" --> synth
+    critic -- "fail, retry=0" --> rag_refine
+    critic -- "fail, retry>=1" --> persist
+    rag_refine --> synth
 
     style intake fill:#438DD5,color:#fff
     style context fill:#438DD5,color:#fff
@@ -29,6 +32,7 @@ flowchart TD
     style estimation fill:#438DD5,color:#fff
     style synth fill:#438DD5,color:#fff
     style critic fill:#438DD5,color:#fff
+    style rag_refine fill:#438DD5,color:#fff
     style persist fill:#438DD5,color:#fff
 ```
 
@@ -41,7 +45,8 @@ flowchart TD
 | Policy Checker | `client_context`, `intervention_delta` | `policy_result` |
 | Estimation Layer | `client_context`, `intervention_delta` | `psm_result`, `rag_chunks`, `graph_dsl` |
 | Intervention Synthesizer | Контекст кейса и evidence | `explanation` |
-| Critic / Guardrail | `explanation` и evidence | `critic_result`, `retry_count` |
+| Critic / Guardrail | `explanation` и evidence | `critic_result` (rule_issues + llm_issues), `retry_count` |
+| RAG Refiner | `critic_result.issues`, `rag_query_history` | Дополненный `rag_chunks`, `rag_iterations`, `rag_query_history` |
 | Case Persister | Полное состояние кейса | `status`, `latency_ms`, запись в SQLite |
 
 > `CaseState` — общий транспорт между узлами, не показан как отдельный компонент чтобы не перегружать схему.

@@ -6,16 +6,21 @@ Sequence diagram для основного сценария «оценка за�
 
 ```mermaid
 sequenceDiagram
-    actor Analyst as 👤 Аналитик
+    actor Analyst as Аналитик
     participant Agent as Agent Service<br/>(LangGraph)
     participant Tools as Local Tools<br/>(PSM, RAG, Graph)
     participant DB as SQLite
     participant LLM as OpenAI API
 
     Analyst->>Agent: client_id + intervention_delta
-    Agent->>Agent: intake → load_context → policy_check
-    Agent->>DB: cooldown lookup
-    DB-->>Agent: allowed
+
+    Agent->>Agent: intake (парсинг + валидация)
+    Note right of Agent: решение: продолжить<br/>или abort(parse_error)
+
+    Agent->>DB: load_context + cooldown lookup
+    DB-->>Agent: профиль + история
+    Agent->>Agent: policy_check
+    Note right of Agent: решение: allowed<br/>или abort(policy_blocked)
 
     par estimation параллельно
         Agent->>Tools: PSM
@@ -24,14 +29,19 @@ sequenceDiagram
     and
         Agent->>Tools: Graph DSL
     end
-    Tools-->>Agent: evidence bundle
+    Tools-->>Agent: evidence bundle (часть может быть пустой)
+    Note right of Agent: решение: продолжить с тем, что есть<br/>(degraded) или abort(no_evidence)
 
-    Agent->>LLM: synthesize prompt
+    Agent->>LLM: synthesize<br/>(выбор шаблона по кейсу)
     LLM-->>Agent: explanation JSON
-    Agent->>Agent: critic check (passed)
+
+    Agent->>Agent: critic — 5 проверок
+    Note right of Agent: решение: passed / retry /<br/>degraded → human review
 
     Agent->>DB: persist case
-    Agent-->>Analyst: explanation + sources
+    Note right of Agent: решение: финальный статус<br/>done / degraded / aborted
+
+    Agent-->>Analyst: explanation + sources + статус
 ```
 
 ## Что покрывает диаграмма
@@ -40,6 +50,24 @@ sequenceDiagram
 - Параллельное выполнение PSM, RAG и Graph DSL внутри estimation
 - Один LLM-вызов в Synthesizer без retry
 - Сохранение в SQLite через Persister
+
+## Где здесь агентность
+
+Happy path — это **прямая ветка** workflow, поэтому LLM-driven циклы здесь не активируются. Реальная агентность системы видна в alternative paths и описана в ADR-8 (`system-design.md` §1):
+
+**Rule-based safety floor** — детерминированные branching-точки, видимые на диаграмме как `решение: ...`:
+- abort при parse_error / missing_intervention (`agent-orchestrator.md` §3.1)
+- блокировка policy (`agent-orchestrator.md` §3.3)
+- abort при `no_evidence` или продолжение в degraded (`agent-orchestrator.md` §3.4)
+- классификация финального статуса и `requires_human_review` (`agent-orchestrator.md` §3.8)
+
+**LLM-driven refinement loops** (НЕ активируются в happy path, см. `workflow.md`):
+- **Adaptive RAG (`rag_refine`)** — после critic fail LLM формулирует уточнённый RAG-запрос на основе issues, инициирует повторный retrieval, затем synthesize. Max 2 итерации. Это первая точка, где LLM реально управляет вызовом инструмента (`agent-orchestrator.md` §3.7).
+- **LLM-augmented critic (level 2)** — после прохождения rule-based проверок LLM делает смысловой self-check (consistency, faithfulness, hedging, completeness). Issues от LLM-critic триггерят rag_refine + retry, как и rule issues (`observability-evals.md` §4.4).
+
+Тем самым в системе работает реальный LLM-in-the-loop pattern: **synthesize → critic (LLM) → rag_refine (LLM) → synthesize**, с жёсткими safety-границами от rule-based слоя.
+
+> **Что НЕ делается в PoC** (осознанно): LLM-driven planner перед estimation, conditional tool selection через LLM, ReAct цикл с произвольным числом итераций. См. ADR-8 для обоснования.
 
 ## Что НЕ покрывает
 

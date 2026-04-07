@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS cases (
     latency_ms    INTEGER,
     prompt_versions_json TEXT,            -- JSON: {"base": "v1.0", "whatif": "v2.1"}
     experiment_variant TEXT,              -- "A" | "B" | NULL — A/B-эксперимент, см. observability-evals §5
+    rag_iterations INTEGER DEFAULT 1,     -- 1 = только initial RAG; 2 = был rag_refine (см. agent-orchestrator §3.7)
+    llm_critic_issues_json TEXT,          -- JSON: список issues от LLM-augmented critic (см. observability-evals §4.4)
     updated_at    TIMESTAMP
 );
 

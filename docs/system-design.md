@@ -30,6 +30,19 @@ LangSmith free tier (5000 traces/мес) для трейсинга LangGraph. Lo
 
 RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `IndexFlatIP`. Для 50 документов brute-force оптимален. Подробнее: `specs/retriever.md`.
 
+### ADR-8: Hybrid agentность — rule-based safety floor + LLM-driven refinement
+
+Чтобы система соответствовала позиционированию «агентная», но не теряла предсказуемости и safety, выбран гибридный дизайн:
+
+- **Rule-based safety floor:** Policy, Critic level 1 (5 проверок), determination статуса в Persister, conditional edges по результатам — всё детерминированное. Эти слои защищают от галлюцинаций LLM и делают систему тестируемой.
+- **LLM-driven refinement loops поверх floor:** два места, где LLM реально управляет выполнением, а не только парсит/синтезирует:
+  1. **Adaptive RAG** (`rag_refine`, см. `specs/agent-orchestrator.md` §3.7) — LLM формулирует уточнённый RAG-запрос на основе critic issues и инициирует повторный retrieval. Bounded: max 2 итерации.
+  2. **LLM-augmented critic** (level 2, см. `specs/observability-evals.md` §4.4) — LLM проверяет смысловую консистентность объяснения с числами/документами, дополняя rule-based проверки.
+
+Эта гибридность даёт реальный LLM-in-the-loop pattern (synthesize → critic → rag_refine → synthesize), но с жёсткими safety-границами: rule-based проверки всегда выполняются и блокируют некорректный вывод независимо от того, что предложил LLM.
+
+**Что НЕ делается** (осознанно): LLM-driven planner, conditional tool selection через LLM перед estimation, ReAct цикл с произвольным числом итераций. Эти расширения возможны позже, но в PoC они увеличили бы поверхность атаки prompt injection и нарушили принцип «safety не зависит от LLM».
+
 ---
 
 ## 2. Модули
@@ -42,9 +55,10 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 | 4 | Causal Estimation | PSM: ATE/ATT | LangGraph tool node. Greedy 1:1 matching, caliper, auto-detect. |
 | 5 | Causal Graph | Причинно-следственные связи между признаками | LangGraph tool node. Загрузка DAG из JSON, фильтрация по confidence → DSL для промпта. |
 | 6 | Evidence Retrieval | RAG: поиск банковских документов | LangGraph tool node. FAISS + e5-small, top_k. |
-| 7 | Critic / Guardrail | Пост-генерационные проверки | LangGraph node. 5 rule-based проверок. |
+| 7 | Critic / Guardrail | Пост-генерационные проверки | LangGraph node. **2 уровня:** 5 rule-based + LLM-augmented смысловые проверки. |
 | 8 | Intervention Synthesizer | Генерация Explanation через LLM | LangGraph node. Промпт-шаблоны + JSON/text fallback. |
-| 9 | Case State & Memory | Персистентность кейсов | SQLite `cases`. Audit + cooldown. |
+| 9 | RAG Refiner | LLM-driven переформулировка RAG-запроса | LangGraph node. Запускается между critic fail и retry-synthesize, max 1 итерация. |
+| 10 | Case State & Memory | Персистентность кейсов | SQLite `cases`. Audit + cooldown. |
 
 ---
 
@@ -82,12 +96,16 @@ START
      ├── blocked ─────────────▶ abort ─▶ persist ─▶ END
      │
      └── allowed ─────────────▶ estimation ─▶ synthesize ─▶ critic_check
-                                PSM + RAG + Graph            │
+                                PSM + RAG + Graph            │  (rule + LLM)
+                                                              │
                                                               ├── pass ─▶ persist ─▶ END
-                                                              ├── retry_count = 0
-                                                              │   └── retry_count := 1 ─▶ synthesize
-                                                              └── retry_count ≥ 1
-                                                                  └── persist_with_warning ─▶ END
+                                                              │
+                                                              ├── fail + retry_count = 0
+                                                              │   └─▶ rag_refine ─▶ synthesize  (retry_count := 1)
+                                                              │       (LLM формулирует уточнённый RAG query)
+                                                              │
+                                                              └── fail + retry_count ≥ 1
+                                                                  └─▶ persist_with_warning ─▶ END
 ```
 
 ### 3.3 Описание узлов
@@ -98,7 +116,8 @@ START
 - **policy_check** включает cooldown через SQLite (30 дней). При недоступности SQLite — fail-open с `requires_human_review = True`.
 - **estimation** — параллельный запуск PSM + RAG + Graph. Каждый может fail независимо → degraded mode. Если все 3 источника недоступны — abort с `no_evidence` (синтез без данных не имеет смысла).
 - **PSM** — при `n_pairs < 50` возвращает `ok=False` (числа доступны, но ненадёжны).
-- **critic_check** — 5 rule-based проверок. Макс. 1 retry.
+- **critic_check** — 2 уровня: 5 rule-based проверок + LLM-augmented смысловые проверки. Макс. 1 retry, перед retry запускается `rag_refine`.
+- **rag_refine** — LLM формулирует уточнённый RAG-запрос на основе critic issues, делает повторный retrieval (max `rag_iterations = 2`). Это первая точка реального LLM-driven control flow в системе (см. ADR-8).
 
 ---
 

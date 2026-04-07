@@ -22,14 +22,16 @@ class CaseState(TypedDict):
 
     # Estimation
     psm_result: Optional[dict]                      # {ok, ate, att, n_pairs} или None
-    rag_chunks: list[str]                           # top-k чанков
+    rag_chunks: list[str]                           # top-k чанков (накопительный список после rag_refine)
+    rag_iterations: int                             # сколько раз вызывался RAG (1 — initial, ≤ 2 после rag_refine)
+    rag_query_history: list[str]                    # все формулировки RAG-запросов по итерациям
     graph_dsl: str                                  # DSL-строка рёбер
 
     # Synthesis
     explanation: dict                               # {diagnosis, drivers_pos, drivers_neg, ...}
 
     # Critic
-    critic_result: dict                             # {passed, issues}
+    critic_result: dict                             # {passed, rule_issues, llm_issues, issues} — см. §3.6
     retry_count: int                                # 0 или 1
 
     # Human review
@@ -37,7 +39,7 @@ class CaseState(TypedDict):
     review_reason: Optional[str]
 
     # Метаданные
-    status: str                                     # intake|context|policy|estimation|synthesis|critic|done|aborted|degraded
+    status: str                                     # intake|context|policy|estimation|synthesis|critic|rag_refine|done|aborted|degraded
     trace_id: Optional[str]
     latency_ms: Optional[int]
     abort_reason: Optional[str]
@@ -100,16 +102,49 @@ Rule-based проверки допустимости:
 
 ### 3.6 critic_check
 
-5 rule-based проверок (подробнее в `observability-evals.md`):
+Двухуровневая проверка: rule-based safety floor + LLM-augmented смысловые проверки.
+
+**Уровень 1 — rule-based (5 проверок, подробнее в `observability-evals.md` §4.3):**
 1. Числовая консистентность ATT/ATE
 2. Атрибуция источников (doc_id в rag_chunks)
 3. Валидность рёбер графа
 4. Хеджирование при слабых данных
 5. Полнота обязательных полей
 
-**Переходы:** pass → persist | fail + `retry_count == 0` → `retry_count := 1`, synthesize | fail + `retry_count >= 1` → persist_with_warning
+**Уровень 2 — LLM-augmented (см. `observability-evals.md` §4.4):** запускается **только** если уровень 1 не нашёл блокирующих проблем. LLM проверяет смысловую консистентность объяснения с числами/документами, адекватность хеджирования и полноту recommendations.
 
-### 3.7 persist
+**Результат:**
+```python
+{
+  "passed": bool,                # True если оба уровня прошли
+  "rule_issues": list[str],      # hard issues (блокирующие)
+  "llm_issues": list[str],       # soft issues (смысловые)
+  "issues": list[str],           # объединённый список для prompt retry
+}
+```
+
+**Переходы:**
+- pass → persist
+- fail + `retry_count == 0` → **rag_refine** → synthesize (`retry_count := 1`)
+- fail + `retry_count >= 1` → persist_with_warning
+
+### 3.7 rag_refine
+
+Адаптивная переформулировка RAG-запроса на основе critic issues. Запускается между `critic_check` (fail) и retry-`synthesize`. Это первый узел графа, где **LLM реально управляет вызовом инструмента** (см. ADR-8 в `system-design.md`).
+
+**Шаги:**
+1. На вход: `critic_result.issues`, `rag_query_history`, текущий `explanation`, `intervention_delta`
+2. LLM-prompt: «По issues ниже сформулируй уточнённый русскоязычный RAG-запрос, который дозапросит недостающий контекст. Не повторяй формулировки из истории.» → новый `query_v2`
+3. Вызов RAG с `query_v2`, top_k=3
+4. **Append**, не replace: новые чанки добавляются к `rag_chunks` (с дедупликацией по chunk_id)
+5. `rag_iterations += 1`, `rag_query_history.append(query_v2)`
+
+**Stop conditions:**
+- Максимум `rag_iterations = 2` (1 initial в estimation + 1 refine). Больше итераций не делаем — это PoC, бесконечные циклы запрещены.
+- При недоступности RAG: rag_refine skip, переход сразу в synthesize (degraded).
+- При недоступности LLM для формулировки query: rag_refine skip, переход в synthesize.
+
+### 3.8 persist
 
 1. Вычисление `latency_ms`
 2. Определение `status`: done / aborted / degraded
@@ -130,7 +165,11 @@ Rule-based проверки допустимости:
 | Сценарий | Стратегия |
 |----------|-----------|
 | LLM: невалидный JSON | JSON mode → text mode fallback |
-| Critic fail | Повторный synthesize с issues (макс. 1 retry) |
+| Critic fail (rule или LLM) + `retry_count == 0` | **rag_refine → synthesize** (max 1 retry) |
+| Critic fail + `retry_count >= 1` | persist_with_warning, `requires_human_review = True` |
+| rag_refine: LLM не смог сформулировать query | Skip rag_refine → synthesize напрямую |
+| rag_refine: RAG недоступен | Skip rag_refine → synthesize напрямую |
+| `rag_iterations >= 2` | rag_refine больше не запускается |
 | PSM / RAG / Graph fail (частично) | Skip, degraded mode |
 | Все 3 источника недоступны | Abort с `no_evidence` |
 | PSM: `n_pairs < 50` | `ok=False`, числа доступны но ненадёжны |

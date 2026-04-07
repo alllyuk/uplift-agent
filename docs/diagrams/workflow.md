@@ -32,9 +32,11 @@ stateDiagram-v2
     synthesize --> critic_check : draft answer
     synthesize --> persist_aborted : LLM unavailable
 
-    critic_check --> persist_done : passed
-    critic_check --> synthesize : retry once
-    critic_check --> persist_warning : still failing
+    critic_check --> persist_done : passed (rule + LLM)
+    critic_check --> rag_refine : fail, retry_count = 0
+    critic_check --> persist_warning : fail, retry_count >= 1
+
+    rag_refine --> synthesize : new RAG query (LLM-driven)
 
     persist_done --> [*]
     persist_warning --> [*]

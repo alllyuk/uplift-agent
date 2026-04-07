@@ -56,6 +56,15 @@ chunks: list[str] = rag.perform_query(query="...", top_k=3)
 
 ## 8. Ограничения
 
-- Макс. контекст: 3 чанка × ~1500 символов ≈ 1500 tokens
+- Макс. контекст: 3 чанка × ~1500 символов ≈ 1500 tokens (на одну итерацию; при rag_refine суммарно до 6 чанков с дедупликацией)
 - RAG-контент — untrusted input, не может менять системные инструкции (governance.md §7)
 - Статичный корпус: rebuild при изменении документов или embedding model
+
+## 9. Adaptive RAG (rag_refine)
+
+RAG может вызываться повторно через узел `rag_refine` (см. `agent-orchestrator.md` §3.7) с переформулированным LLM-запросом. Это часть гибридной агентности (ADR-8 в `system-design.md`):
+
+- **Trigger:** critic fail на первой попытке synthesize
+- **Источник новой формулировки:** LLM получает critic issues + историю запросов из `rag_query_history` и формулирует уточнённый query, не повторяющий предыдущие
+- **Stop:** `rag_iterations >= 2` (1 initial + 1 refine)
+- **Накопление:** новые чанки **append** к `rag_chunks` с дедупликацией по chunk_id, а не replace
