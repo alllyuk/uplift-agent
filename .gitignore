@@ -1,0 +1,49 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+artifacts/
+rag_data/
+reports/
+
+# --- Virtualenv ---
+venv/
+.venv/
+env/
+ENV/
+.env
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.iml
+.DS_Store
+.codex
+
+# --- Jupyter / IPython ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Logs & temp ---
+*.log
+logs/
+log/
+*.tmp
+*.swp
+
+# --- Cache ---
+.cache/
+.mypy_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+.tox/
+pytestdebug.log
+causal_outputs/

@@ -23,7 +23,7 @@ response: AIMessage = llm.invoke(messages)
 
 | Параметр | Источник | Default |
 |----------|----------|---------|
-| model | `LLM_MODEL_NAME` env | Из конфигурации |
+| model | `LLM_MODEL` env | Из конфигурации |
 | temperature | `LLM_TEMPERATURE` env | Из конфигурации |
 | seed | `DataGenerationConfig.seed` | 42 |
 | response_format | Программно | `{"type": "json_object"}` |

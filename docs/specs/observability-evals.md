@@ -148,7 +148,7 @@ LANGCHAIN_PROJECT=uplift-agent-poc
 ### 5.1 Что сравнивается
 
 - **Версии промптов** — `prompt_version_base`, `prompt_version_whatif` (см. `agent-orchestrator.md` §6.2)
-- **LLM-модели** — через `LLM_MODEL_NAME` (например `gpt-4o-mini` vs `gpt-4o`)
+- **LLM-модели** — через `LLM_MODEL`
 - **Параметры** — `temperature`, `top_k` для RAG
 
 ### 5.2 Дизайн эксперимента

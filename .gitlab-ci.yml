@@ -1,0 +1,76 @@
+stages:
+  - build
+  - deploy
+
+# Build and push a single immutable image (by commit SHA)
+build-image:
+  stage: build
+  image: docker:24.0
+  services:
+    - docker:24.0-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_BUILDKIT: "1"
+  script:
+    # Use the job token for pushes within this project
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
+
+    # Build from the latest base image; tag by full commit SHA (immutable)
+    - docker build --pull -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+
+    # Save the exact image ref as an artifact for the deploy job
+    - printf '%s\n' "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" > image-ref.txt
+  artifacts:
+    paths:
+      - image-ref.txt
+    expire_in: 1 day
+  rules:
+  #   - if: '$CI_COMMIT_BRANCH == "main"'
+      - when: never
+  retry: 1
+  interruptible: true
+  timeout: 60m
+
+# Deploy to the server using an SSH key and a deploy token for the registry
+deploy-production:
+  stage: deploy
+  image: alpine:3.20
+  needs:
+    - job: build-image
+      artifacts: true
+  environment:
+    name: production
+    url: "http://$DEPLOY_HOST:8501"
+  variables:
+    GIT_STRATEGY: none
+  resource_group: production
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval "$(ssh-agent -s)"
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - install -m 700 -d ~/.ssh
+    - touch ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+    - ssh-keygen -F "$DEPLOY_HOST" -f ~/.ssh/known_hosts >/dev/null || ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+  script:
+    - IMAGE_REF="$(cat image-ref.txt)"
+    - |
+      ssh -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+        REGISTRY_URL="$CI_REGISTRY" \
+        IMAGE_REF="$IMAGE_REF" \
+        REGISTRY_USER="$REGISTRY_DEPLOY_USER" \
+        REGISTRY_PASSWORD="$REGISTRY_DEPLOY_PASSWORD" \
+        'sh -s' << 'EOF'
+          set -eu
+          echo "$REGISTRY_PASSWORD" | docker login -u "$REGISTRY_USER" --password-stdin "$REGISTRY_URL"
+          /home/deploy/deploy.sh "$IMAGE_REF"
+        EOF
+  rules:
+  #   - if: '$CI_COMMIT_BRANCH == "main"'
+      - when: never
+  retry: 1
+  interruptible: true
+  timeout: 60m

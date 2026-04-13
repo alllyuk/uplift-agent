@@ -12,7 +12,7 @@
 7. Запуск Streamlit / CLI
 ```
 
-**Проверки при старте:** наличие `LLM_API_KEY`; наличие graph-артефактов (опционально — если выбран режим с Graph DSL); наличие RAG-артефактов (опционально — можно запустить в degraded mode без RAG); наличие CSV с данными клиентов (опционально — можно сгенерировать).
+**Проверки при старте:** наличие `OPENAI_API_KEY`; наличие graph-артефактов (опционально — если выбран режим с Graph DSL); наличие RAG-артефактов (опционально — можно запустить в degraded mode без RAG); наличие CSV с данными клиентов (опционально — можно сгенерировать).
 
 ## 2. Система конфигурации
 
@@ -36,7 +36,7 @@ class AppConfig(BaseSettings):
 | **PathsConfig** | `project_root`, `artifacts_dir`, `rag_data_dir`, имена файлов (CSV, JSON, Parquet, FAISS) |
 | **DataGenerationConfig** | `n_clients` (3000), `seed` (42) |
 | **LLMConfig** | `model_name`, `temperature`, `confidence_threshold` (0.45), `bootstrap_rounds`, `sample_rows`, `prompt_version_base`, `prompt_version_whatif` |
-| **APIConfig** | `api_key`, `base_url`, `provider` (openai/local) |
+| **APIConfig** | `openai_api_key`, `llm_base_url`, `provider` (openai/local) |
 | **LoggingConfig** | `level`, `file_rotation` (10MB), `file_retention` (90 days) |
 | **StreamlitConfig** | `theme`, `page_title`, `page_icon` |
 
@@ -50,16 +50,16 @@ class AppConfig(BaseSettings):
 
 | Секрет | Переменная | Хранение |
 |--------|-----------|----------|
-| OpenAI API Key | `LLM_API_KEY` | `.env` (gitignored) или env var |
+| OpenAI API Key | `OPENAI_API_KEY` | `.env` (gitignored) или env var |
 | LangSmith API Key | `LANGCHAIN_API_KEY` | `.env` или env var |
 
-Доступ: `os.getenv("LLM_API_KEY")` с fallback на `api.api_key` из Pydantic. `.env.example` — шаблон без реальных значений. Секреты не логируются.
+Доступ: `OPENAI_API_KEY` из окружения или `.env`. `.env.example` — шаблон без реальных значений. Секреты не логируются.
 
 ## 4. Версии моделей
 
 | Компонент | Настройка |
 |-----------|-----------|
-| LLM | `LLM_MODEL_NAME`, `LLM_PROVIDER` (openai/local), `LLM_BASE_URL` (для local) |
+| LLM | `LLM_MODEL`, `LLM_PROVIDER` (openai/local), `LLM_BASE_URL` (для local) |
 | Embedding | `intfloat/multilingual-e5-small` (384-dim), фиксирован в конфигурации. Смена → полный rebuild RAG-артефактов |
 
 ## 5. Entry points
