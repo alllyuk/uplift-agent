@@ -47,3 +47,8 @@ htmlcov/
 .tox/
 pytestdebug.log
 causal_outputs/
+
+# --- Legacy infra (removed) ---
+prod/
+scripts/
+.gitlab-ci.yml
