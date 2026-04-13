@@ -35,7 +35,7 @@ sequenceDiagram
     Agent->>LLM: synthesize<br/>(выбор шаблона по кейсу)
     LLM-->>Agent: explanation JSON
 
-    Agent->>Agent: critic — 5 проверок
+    Agent->>Agent: critic — L1 (структурные) + L2 (LLM)
     Note right of Agent: решение: passed / retry /<br/>degraded → human review
 
     Agent->>DB: persist case
@@ -63,7 +63,7 @@ Happy path — это **прямая ветка** workflow, поэтому LLM-d
 
 **LLM-driven refinement loops** (НЕ активируются в happy path, см. `workflow.md`):
 - **Adaptive RAG (`rag_refine`)** — после critic fail LLM формулирует уточнённый RAG-запрос на основе issues, инициирует повторный retrieval, затем synthesize. Max 2 итерации. Это первая точка, где LLM реально управляет вызовом инструмента (`agent-orchestrator.md` §3.7).
-- **LLM-augmented critic (level 2)** — после прохождения rule-based проверок LLM делает смысловой self-check (consistency, faithfulness, hedging, completeness). Issues от LLM-critic триггерят rag_refine + retry, как и rule issues (`observability-evals.md` §4.4).
+- **LLM-augmented critic (level 2)** — после прохождения rule-based структурных проверок (атрибуция источников, полнота ответа) LLM делает смысловой self-check (логическая консистентность, соответствие фактам, адекватность хеджирования, полнота рекомендаций). Issues от LLM-critic триггерят rag_refine + retry. На retry-проходе L2 не запускается — только L1 (`observability-evals.md` §4.4).
 
 Тем самым в системе работает реальный LLM-in-the-loop pattern: **synthesize → critic (LLM) → rag_refine (LLM) → synthesize**, с жёсткими safety-границами от rule-based слоя.
 

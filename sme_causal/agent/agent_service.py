@@ -39,6 +39,7 @@ PREDICT_NUMBER_PHRASE = (
 GRAPH_RESPONSE_RULES = (
     "Правила использования графа в ответе:\n"
     "• Используйте ТОЛЬКО рёбра из блока [GRAPH_DSL]; не придумывайте новые рёбра.\n"
+    "• Имена узлов используйте ТОЧНО как в DSL (например Revenue_Growth_Rate, а НЕ 'Profit', 'выручка' или другие синонимы). Аналитик сопоставляет ответ с графом — перефразирование имён узлов недопустимо.\n"
     "• Поле sign/conf используйте только внутренне: sign задаёт направление эффекта, conf задаёт доверие.\n"
     "• В пользовательском ответе НЕ пишите технические маркеры 'sign', 'conf' и шаблоны вида '(sign:+, conf=0.7)'.\n"
     "• Пользовательская формулировка для графа: 'По причинному графу: A положительно/отрицательно влияет на B; доверие высокое/среднее/низкое: ...'.\n"
@@ -392,7 +393,7 @@ class CausalAgent:
                 ),
                 (
                     "user",
-                    "{graph_dsl_block}{rag_context_block}{source_availability_block}"
+                    "{graph_dsl_block}{rag_context_block}{source_availability_block}{issues_context_block}"
                     # Блок для информации о неточном совпадении
                     "{match_info_block}\n" "БАЗОВЫЙ ПРОФИЛЬ КЛИЕНТА:\n{base_json}\n\n"
                     # Заголовок и логика меняются в зависимости от наличия delta
@@ -493,6 +494,8 @@ class CausalAgent:
         match_info: Optional[Dict] = None,
         target_metric: Optional[str] = None,
         predict_concrete_target: bool = False,
+        rag_context: Optional[str] = None,
+        issues_context: Optional[str] = None,
     ) -> Explanation:
         # Только реально изменившиеся поля
         delta = {k: v for k, v in delta_changes.items() if base_ctx.get(k) != v}
@@ -619,7 +622,9 @@ class CausalAgent:
                 )
                 graph_dsl_block = header + guidance + graph_dsl + "\n\n"
 
-        if use_rag:
+        if rag_context is not None:
+            rag_ctx = rag_context
+        elif use_rag:
             rag = RAG()
             if rag_query_text:
                 logger.info(f"Using original query for RAG: '{rag_query_text}'")
@@ -633,6 +638,13 @@ class CausalAgent:
         else:
             rag_ctx = ""
         rag_context_block = f"RAG-КОНТЕКСТ:\n{rag_ctx}\n\n" if rag_ctx else ""
+        issues_context_block = ""
+        if issues_context:
+            issues_context_block = (
+                "ИСПРАВЬТЕ СЛЕДУЮЩИЕ ПРОБЛЕМЫ, ОБНАРУЖЕННЫЕ В ПРЕДЫДУЩЕЙ ВЕРСИИ ОТВЕТА:\n"
+                f"{issues_context}\n"
+                "Убедитесь, что новая версия ответа не содержит этих проблем.\n\n"
+            )
         source_availability_block = (
             "ПЕРЕДАННЫЕ ИСТОЧНИКИ:\n"
             "• PROFILE: да\n"
@@ -658,6 +670,7 @@ class CausalAgent:
             features_description=self._features_description,
             rag_context_block=rag_context_block,
             source_availability_block=source_availability_block,
+            issues_context_block=issues_context_block,
         )
 
         # Build full prompt text for evaluation purposes

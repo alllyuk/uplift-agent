@@ -8,8 +8,6 @@ import pandas as pd
 import numpy as np
 from loguru import logger
 
-# Load environment variables from .env if present
-# from sme_causal.core import env  # noqa: F401
 from sme_causal.agent.agent_service import CausalAgent, Explanation, QueryParser, ParsedQuery
 from sme_causal.core.config import get_config
 from sme_causal.core.utils import configure_logging, sanity_checks, parse_client_id_and_intent
@@ -18,9 +16,9 @@ from sme_causal.core.columns import (
     NEW_PRODUCT_OFFER,
     NEW_PRODUCT_OFFER_TYPE,
 )
-from sme_causal.inference.psm import CausalInferenceAnalyzer
-
-PSM_MIN_GROUP_SIZE = 100
+from sme_causal.inference.psm_runner import run_psm
+from sme_causal.orchestrator.pipeline import Pipeline
+from sme_causal.orchestrator.persistence import CaseStore
 
 
 def _parse_kv_pairs(text: str) -> Dict[str, object]:
@@ -57,13 +55,6 @@ def _parse_kv_pairs(text: str) -> Dict[str, object]:
     return out
 
 
-def _is_finite_number(value: object) -> bool:
-    try:
-        return bool(np.isfinite(float(value)))
-    except (TypeError, ValueError):
-        return False
-
-
 def _json_safe(value: object) -> object:
     if isinstance(value, dict):
         return {str(k): _json_safe(v) for k, v in value.items()}
@@ -74,148 +65,6 @@ def _json_safe(value: object) -> object:
     if isinstance(value, float) and not np.isfinite(value):
         return None
     return value
-
-
-def _psm_reliability(
-    *,
-    att: object,
-    n_treated: Optional[int],
-    n_control: Optional[int],
-    min_group_size: int = PSM_MIN_GROUP_SIZE,
-) -> Dict[str, object]:
-    if not _is_finite_number(att):
-        return {
-            "psm_reliable": False,
-            "psm_reason": "ATT is unavailable; naive ATE must not be used as the primary personal effect.",
-        }
-
-    if n_treated is None or n_control is None:
-        return {
-            "psm_reliable": False,
-            "psm_reason": "Matched sample sizes are unavailable.",
-        }
-
-    if n_treated < min_group_size or n_control < min_group_size:
-        return {
-            "psm_reliable": False,
-            "psm_reason": (
-                f"Matched sample is too small: n_treated={n_treated}, "
-                f"n_control={n_control}, required>={min_group_size}."
-            ),
-        }
-
-    return {
-        "psm_reliable": True,
-        "psm_reason": (
-            f"Matched sample is large enough: n_treated={n_treated}, "
-            f"n_control={n_control}."
-        ),
-    }
-
-
-def _run_psm(
-    df: pd.DataFrame,
-    intervention_delta: Dict[str, object],
-    *,
-    outcome_col: str = "Revenue_Growth_Rate",
-    treatment_col: Optional[str] = None,
-    covariates: Optional[List[str]] = None,
-    caliper: float = 0.05,
-    match_ratio: int = 1,
-    threshold: Optional[float] = None,
-) -> Dict[str, object]:
-    """
-    Выполняет расчет ATT (matched) и ATE (наивный) через CausalInferenceAnalyzer.run(df).
-    Возвращает dict с метриками/диагностикой.
-
-    Примечание:
-    - В твоём классе нет аргумента match_ratio. Здесь мы трактуем:
-      match_ratio == 1  -> replacement = False (1:1 без возврата)
-      match_ratio != 1  -> replacement = True  (с возвратом)
-    """
-    # 1) Input checks
-    if outcome_col not in df.columns:
-        return {"ok": False, "error": f"Outcome column '{outcome_col}' not found"}
-
-    # If treatment not set, take first key from delta
-    if treatment_col is None:
-        treatment_col = next(
-            (k for k in intervention_delta.keys() if k in df.columns), None
-        )
-    if treatment_col is None:
-        return {"ok": False, "error": "Cannot infer treatment column from delta keys"}
-
-    # 2) Threshold for non-binary treatment
-    s = df[treatment_col]
-    if not s.dropna().isin([0, 1]).all():
-        if pd.api.types.is_numeric_dtype(s):
-            if threshold is None:
-                threshold = float(
-                    np.nanpercentile(pd.to_numeric(s, errors="coerce"), 75)
-                )
-                logger.info(
-                    f"PSM: auto-threshold for '{treatment_col}' = {threshold:.4f}"
-                )
-        else:
-            return {
-                "ok": False,
-                "error": f"Treatment '{treatment_col}' is non-binary and non-numeric. Provide explicit threshold or pre-binarize.",
-            }
-
-    # 3) Initialize and run analyzer
-    try:
-        analyzer = CausalInferenceAnalyzer(
-            target=outcome_col,
-            treatment_variable=treatment_col,
-            covariates=covariates,
-            threshold=threshold,  # None если бинарный; число если автобинаризация
-            replacement=(match_ratio != 1),  # mapping см. примечание в докстроке
-            caliper=caliper,
-            # logreg_max_iter оставить по умолчанию (1000)
-        )
-        res = analyzer.run(df)
-    except Exception as e:
-        return {"ok": False, "error": f"PSM failed: {e}"}
-
-    # 4) Collect metrics
-    att = getattr(res, "ate", None)
-    ate = getattr(res, "ate_naive", None)
-    n_pairs = getattr(res, "n_pairs", None)
-    matched_df = getattr(res, "matched_df", None)
-
-    n_treated = n_control = None
-    if isinstance(matched_df, pd.DataFrame) and not matched_df.empty:
-        treated_col_name = "__treated__"  # внутреннее имя из класса
-        if treated_col_name in matched_df.columns:
-            n_treated = int((matched_df[treated_col_name] == 1).sum())
-            n_control = int((matched_df[treated_col_name] == 0).sum())
-
-    if n_pairs == 0:
-        n_treated = n_treated or 0
-        n_control = n_control or 0
-
-    reliability = _psm_reliability(
-        att=att,
-        n_treated=n_treated,
-        n_control=n_control,
-    )
-
-    return {
-        "ok": True,
-        "treatment_col": treatment_col,
-        "outcome_col": outcome_col,
-        "covariates": covariates,
-        "threshold": threshold,
-        "caliper": caliper,
-        "match_ratio": match_ratio,  # для протокола (см. mapping)
-        "replacement": (match_ratio != 1),
-        "att": att,
-        "ate": ate,
-        "n_pairs": n_pairs,
-        "n_treated": n_treated,
-        "n_control": n_control,
-        **reliability,
-    }
 
 
 def main() -> None:
@@ -266,23 +115,18 @@ def main() -> None:
         help="Graph construction method: llm, algo, algo_llm or hybrid",
     )
 
-    # Graph usage flag
+    # Evidence source flags (all enabled by default)
     parser.add_argument(
-        "--use_graph", action="store_true", help="Use causal graph in prompts"
+        "--no-graph", action="store_true",
+        help="Disable causal graph in prompts (enabled by default)",
     )
-
-    # RAG flag
     parser.add_argument(
-        "--use_rag",
-        action="store_true",
-        help="Use RAG to enrich context (documents)",
+        "--no-rag", action="store_true",
+        help="Disable RAG context enrichment (enabled by default)",
     )
-
-    # PSM settings
     parser.add_argument(
-        "--use-psm",
-        action="store_true",
-        help="Run PSM ATT/ATE estimation in addition to LLM what-if",
+        "--no-psm", action="store_true",
+        help="Disable PSM ATT/ATE estimation (enabled by default)",
     )
     parser.add_argument(
         "--outcome-col",
@@ -316,6 +160,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.debug_json:
         args.json = True
+
+    # Derive positive flags from --no-* args
+    use_graph = not args.no_graph
+    use_rag = not args.no_rag
+    use_psm = not args.no_psm
 
     # Configure logging for CLI run
     configure_logging(
@@ -457,7 +306,7 @@ def main() -> None:
         logger.info(f"Action is 'optimize' for target '{target_metric}'. Running client diagnosis...")
         expl: Explanation = agent.explain_client(
             ctx,
-            use_graph=args.use_graph,
+            use_graph=use_graph,
             target_metric=target_metric
         )
 
@@ -475,113 +324,127 @@ def main() -> None:
             logger.info(expl)
         return
 
-    # B) If 'what_if' (default) -> Run Baseline + Scenario Analysis + PSM
+    # B) If 'what_if' (default) -> Run via Pipeline
 
-    # Baseline Diagnosis
+    # Initialize Pipeline with SQLite persistence
+    user_covariates = None
+    if args.covariates.strip():
+        user_covariates = [c.strip() for c in args.covariates.split(",") if c.strip()]
+
+    case_store: Optional[CaseStore] = None
+    try:
+        case_store = CaseStore(cfg.cases_db_path)
+    except Exception:
+        logger.warning("Could not initialize SQLite store (non-fatal)")
+
+    pipeline = Pipeline(
+        df,
+        case_store=case_store,
+        graph_method=args.graph_method,
+        use_rag=use_rag,
+        use_graph=use_graph,
+        use_psm=use_psm,
+        outcome_col=target_metric,
+        covariates=user_covariates,
+        caliper=args.psm_caliper,
+        min_conf=cfg.llm.confidence_threshold,
+        model=cfg.llm.model_name,
+        temperature=cfg.llm.temperature,
+    )
+
+    # Baseline Diagnosis (separate from pipeline, for backward-compatible output)
     expl_baseline: Explanation = agent.explain_client(
         ctx,
-        use_graph=args.use_graph,
-        target_metric=target_metric
+        use_graph=use_graph,
+        target_metric=target_metric,
     )
 
-    # PSM Calculation (Optional)
-    psm_result: Optional[Dict[str, object]] = None
-    psm_metrics_for_llm: Optional[Dict[str, object]] = None
-
-    if args.use_psm and delta:
-        user_covariates = None
-        if args.covariates.strip():
-            user_covariates = [
-                c.strip() for c in args.covariates.split(",") if c.strip()
-            ]
-
-        logger.info(f"Running PSM for target: {target_metric}")
-        psm_result = _run_psm(
-            df,
-            delta,
-            outcome_col=target_metric,  # Use parsed or CLI metric
-            treatment_col=args.treatment_col,
-            covariates=user_covariates,
-            caliper=args.psm_caliper,
-            match_ratio=args.psm_match_ratio,
-            threshold=args.psm_threshold,
-        )
-
-        if psm_result.get("ok"):
-            psm_metrics_for_llm = {
-                "att": psm_result.get("att"),
-                "ate": psm_result.get("ate"),
-                "n_pairs": psm_result.get("n_pairs"),
-                "n_treated": psm_result.get("n_treated"),
-                "n_control": psm_result.get("n_control"),
-                "treatment_col": psm_result.get("treatment_col"),
-                "outcome_col": psm_result.get("outcome_col"),
-                "threshold": psm_result.get("threshold"),
-                "caliper": psm_result.get("caliper"),
-                "covariates": psm_result.get("covariates"),
-                "psm_reliable": psm_result.get("psm_reliable"),
-                "psm_reason": psm_result.get("psm_reason"),
-            }
-
-    # What-If Explanation
-    what_if_expl: Explanation = agent.explain_what_if(
-        ctx,
+    # Run pipeline
+    case_state = pipeline.run(
+        client_id,
         delta,
-        psm_metrics=psm_metrics_for_llm,
-        use_graph=args.use_graph,
-        use_rag=args.use_rag,
-        rag_query_text=rag_query_text,
+        raw_query=rag_query_text,
+        target_metric=target_metric,
         match_info=match_info,
-        target_metric=target_metric
     )
+
+    # Extract results from CaseState
+    psm_result = case_state.get("psm_result")
+    explanation = case_state.get("explanation", {})
+    status = case_state.get("status", "unknown")
+    critic_result = case_state.get("critic_result", {})
 
     # 8. Output Results
     if args.json:
         payload = {
             "client_id": client_id,
             "action_type": "what_if",
+            "case_id": case_state.get("case_id"),
+            "status": status,
             "query_parsed": {
                 "label": query_analysis_label,
                 "match_info": match_info,
-                "detected_target": target_metric
+                "detected_target": target_metric,
             } if args.query else None,
             "context": ctx,
             "baseline_diagnosis": expl_baseline.to_dict(include_debug=args.debug_json),
             "what_if": {
                 "delta": delta,
-                "analysis": what_if_expl.to_dict(include_debug=args.debug_json),
-                "psm_stats": psm_result if psm_result and psm_result.get("ok") else None
+                "analysis": explanation,
+                "psm_stats": psm_result if psm_result and psm_result.get("ok") else None,
             },
+            "critic": critic_result,
+            "requires_human_review": case_state.get("requires_human_review", False),
+            "latency_ms": case_state.get("latency_ms"),
         }
+        if case_state.get("abort_reason"):
+            payload["abort_reason"] = case_state["abort_reason"]
         print(_json.dumps(_json_safe(payload), ensure_ascii=False, indent=2, allow_nan=False))
     else:
-        logger.info(f"=== Analysis for {client_id} ===")
+        logger.info(f"=== Analysis for {client_id} (case={case_state.get('case_id', '?')[:8]}) ===")
         if query_analysis_label:
             logger.info(f"Query Intent: {query_analysis_label}")
         if match_info:
-             logger.info(f"Param matching info: {match_info}")
+            logger.info(f"Param matching info: {match_info}")
 
         logger.info("--- Baseline Diagnosis ---")
         logger.info(expl_baseline)
 
-        logger.info("--- What-if Scenario ---")
-        logger.info(f"Delta: {delta}")
-        if not delta and rag_query_text:
-            logger.info(f"General Context: {rag_query_text}")
+        if status == "aborted":
+            logger.warning(f"Case aborted: {case_state.get('abort_reason')}")
+        else:
+            logger.info("--- What-if Scenario ---")
+            logger.info(f"Delta: {delta}")
+            if not delta and rag_query_text:
+                logger.info(f"General Context: {rag_query_text}")
 
-        logger.info(what_if_expl)
+            # Format explanation from CaseState dict
+            for key in ("diagnosis", "drivers_pos", "drivers_neg", "recommendations", "expected_effect"):
+                val = explanation.get(key)
+                if val:
+                    logger.info(f"  {key}: {val}")
 
-        if psm_result is not None:
-            if psm_result.get("ok"):
-                logger.info("--- PSM Results ---")
-                logger.info(
-                    f"Target: {psm_result.get('outcome_col')} | "
-                    f"ATT={psm_result.get('att')} | "
-                    f"ATE={psm_result.get('ate')} | "
-                    f"matched_pairs={psm_result.get('n_pairs')}"
-                )
-            else:
-                logger.warning(f"PSM skipped/failed: {psm_result.get('error')}")
+            if psm_result is not None:
+                if psm_result.get("ok"):
+                    logger.info("--- PSM Results ---")
+                    logger.info(
+                        f"Target: {psm_result.get('outcome_col')} | "
+                        f"ATT={psm_result.get('att')} | "
+                        f"ATE={psm_result.get('ate')} | "
+                        f"matched_pairs={psm_result.get('n_pairs')}"
+                    )
+                else:
+                    logger.warning(f"PSM skipped/failed: {psm_result.get('error')}")
+
+        # Pipeline metadata
+        logger.info(f"--- Pipeline Status: {status} | Latency: {case_state.get('latency_ms')}ms ---")
+        if not critic_result.get("passed", True):
+            logger.warning(f"Critic issues: {critic_result.get('issues', [])}")
+        if case_state.get("requires_human_review"):
+            logger.warning(f"Requires human review: {case_state.get('review_reason')}")
+
+    if case_store:
+        case_store.close()
 
 
 if __name__ == "__main__":

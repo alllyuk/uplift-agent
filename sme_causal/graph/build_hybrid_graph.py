@@ -230,8 +230,8 @@ def _judge_edge_batch(
 
     edges_description = []
     for idx, ((source, target, polarity), edge_data) in enumerate(edge_batch):
-        source_desc = field_docs.get(source, "")[:100]  # Truncate for brevity
-        target_desc = field_docs.get(target, "")[:100]
+        source_desc = field_docs.get(source, "")
+        target_desc = field_docs.get(target, "")
 
         desc_parts = [
             f"Edge {idx}:",
@@ -247,7 +247,7 @@ def _judge_edge_batch(
             desc_parts.append(f"  LLM analysis:")
             desc_parts.append(f"    - Confidence: {llm_conf:.3f}")
             if llm_rationale:
-                desc_parts.append(f"    - Rationale: {llm_rationale[:150]}")
+                desc_parts.append(f"    - Rationale: {llm_rationale}")
 
         if edge_data["algo"]:
             algo_conf = edge_data["algo"].get("confidence", 0.5)

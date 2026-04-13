@@ -7,8 +7,6 @@ from typing import Any, Optional, Tuple, List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage
 
-import tiktoken
-
 class LLMClient(ABC):
     """Unified LLM client interface."""
 
@@ -53,57 +51,6 @@ class LLMClient(ABC):
 
         return ChatOpenAI(**common)  # type: ignore[arg-type]
     
-    def _truncate_messages(
-        self,
-        messages: List[BaseMessage],
-        *,
-        max_tokens: int = 2000,
-        encoding_name: str = "gpt2",   # универсально для gpt-совместимых
-    ) -> List[BaseMessage]:
-        """Жёстко обрезает суммарный контент сообщений до max_tokens.
-
-        Создаёт *копии* сообщений через pydantic .copy(update=...),
-        чтобы не трогать исходные объекты.
-        """
-        enc = tiktoken.get_encoding(encoding_name)
-
-        def get_text(msg: BaseMessage) -> str:
-            c = msg.content
-            if isinstance(c, str):
-                return c
-            if isinstance(c, list):
-                # LangChain иногда хранит контент как список частей
-                parts = []
-                for part in c:
-                    if isinstance(part, dict):
-                        parts.append(part.get("text", ""))
-                    else:
-                        parts.append(str(part))
-                return "\n".join(parts)
-            return str(c)
-
-        total = 0
-        out: List[BaseMessage] = []
-        for m in messages:
-            text = get_text(m)
-            toks = enc.encode(text)
-            n = len(toks)
-
-            if total + n <= max_tokens:
-                out.append(m)        # можно безопасно оставить оригинал
-                total += n
-                continue
-
-            # Нужно резать текущий месседж
-            remain = max_tokens - total
-            if remain <= 0:
-                break
-            cut_text = enc.decode(toks[:remain])
-            out.append(m.copy(update={"content": cut_text}))   # <-- ВАЖНО: copy(update=...)
-            break
-
-        return out
-
     @abstractmethod
     def invoke_with_fallback(
         self,

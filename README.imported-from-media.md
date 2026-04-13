@@ -68,7 +68,13 @@ python -m sme_causal.app.main
 
 Artifacts land under `artifacts/` for LLM-based and Hydrid graph, and also under `causal_outputs/` for algorithm-based graphs.
 
-3.1 Run various what-if scenarious
+**Pipeline flow:** `intake → context → policy_check → estimation (PSM + RAG + Graph in parallel) → synthesize → critic (L1 rules + L2 LLM) → [retry if needed] → persist to SQLite`
+
+All three evidence sources (PSM, Graph, RAG) are **enabled by default**. Disable with `--no-psm`, `--no-graph`, `--no-rag`. If all requested sources fail, the pipeline aborts with `no_evidence`. Cases are persisted to `artifacts/cases.db`.
+
+**Cooldown:** pipeline запоминает выполненные кейсы в SQLite. Если для того же клиента и того же типа интервенции уже есть завершённый кейс за последние 30 дней, повторный запуск будет заблокирован (`policy_blocked`). При последовательном запуске примеров ниже для одного клиента это может сработать. Для сброса: `sqlite3 artifacts/cases.db "DELETE FROM cases WHERE status='done'"`.
+
+3.1 Run various what-if scenarios
 ```bash
 python -m sme_causal.app.run --client-id "C000005" --what-if "New_Product_Offer=1,New_Product_Offer_Type=acquiring"
 
@@ -77,27 +83,27 @@ python -m sme_causal.app.run --json --what-if "Credit_Limit_Change=15.0,Tariff_D
 python -m sme_causal.app.run --what-if "Credit_Limit_Change=25.0"
 ```
 
-3.2 Use features: Propensity Score Matching and Using graph to predict better (default graph building method: LLM). Also you can use RAG-context to get more enviroment or practical context.
+3.2 Disable specific sources with `--no-psm`, `--no-graph`, `--no-rag` flags. Custom PSM settings:
 ```bash
-python -m sme_causal.app.run --client-id "C000005" --what-if "New_Product_Offer=1,New_Product_Offer_Type=acquiring" --use-psm --outcome-col Revenue_Growth_Rate --covariates "Industry,Region,Business_Size,Avg_Account_Balance,Avg_Monthly_Inflow,Avg_Monthly_Outflow,Num_Products"
+python -m sme_causal.app.run --client-id "C000005" --what-if "New_Product_Offer=1,New_Product_Offer_Type=acquiring" --outcome-col Revenue_Growth_Rate --covariates "Industry,Region,Business_Size,Avg_Account_Balance,Avg_Monthly_Inflow,Avg_Monthly_Outflow,Num_Products"
 
-python -m sme_causal.app.run --json --what-if "Credit_Limit_Change=15.0" --use-psm --use_graph
+python -m sme_causal.app.run --json --what-if "Credit_Limit_Change=15.0"
 
-python -m sme_causal.app.run --what-if "Credit_Limit_Change=25.0" --use_graph
+python -m sme_causal.app.run --what-if "Credit_Limit_Change=25.0" --no-psm --no-rag
 
-python -m sme_causal.app.run --what-if "Credit_Limit_Change=25.0" --use_graph --graph-method algo
+python -m sme_causal.app.run --what-if "Credit_Limit_Change=25.0" --graph-method algo
 
-python -m sme_causal.app.run --what-if "Tariff_Discount=1" --use_graph --use-psm --use_rag
+python -m sme_causal.app.run --what-if "Tariff_Discount=1"
 ```
 
 3.3 Use free query format in natural language: ask about any intervention with any target metric. Add `--query` or `-q` argument to use this feature.
 
 ```bash
-python -m sme_causal.app.run --query "Оцените эффект от предложения зарплатного проекта клиенту C000005" --use_graph --use-psm
+python -m sme_causal.app.run --query "Оцените эффект от предложения зарплатного проекта клиенту C000005"
 
-python -m sme_causal.app.run --client-id "C000005" -q "Как изменится баланс клиента клиента, если предложить ему скидку на тариф" --use_graph --use-psm
+python -m sme_causal.app.run --client-id "C000005" -q "Как изменится баланс клиента клиента, если предложить ему скидку на тариф"
 
-python -m sme_causal.app.run --client-id "C000005" -q "Что если поднять кредитный лимит клиенту на 20%" --use_graph --use-psm --outcome-col "Avg_Monthly_Inflow"
+python -m sme_causal.app.run --client-id "C000005" -q "Что если поднять кредитный лимит клиенту на 20%" --outcome-col "Avg_Monthly_Inflow"
 ```
 
 4. Explore via Streamlit UI

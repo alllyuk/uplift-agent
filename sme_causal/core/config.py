@@ -298,6 +298,11 @@ class AppConfig(BaseSettings):
         return self.full_artifacts_dir / self.paths.streamlit_log
 
     @property
+    def cases_db_path(self) -> Path:
+        """Get full path to SQLite cases database."""
+        return self.full_artifacts_dir / "cases.db"
+
+    @property
     def effective_llm_api_key(self) -> Optional[str]:
         """Return effective OpenAI API key from env or config.
 

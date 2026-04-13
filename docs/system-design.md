@@ -16,7 +16,7 @@ DAG причинно-следственных связей между призн
 
 ### ADR-4: Rule-based Policy Checker и Critic
 
-**Policy Checker** — rule-based проверки допустимости интервенций. **Critic** — rule-based проверки консистентности ответов LLM (5 проверок). Оба на Python if/else: safety-слой не должен зависеть от галлюцинаций LLM.
+**Policy Checker** — rule-based проверки допустимости интервенций. **Critic** — двухуровневая проверка: Level 1 (rule-based структурные проверки: атрибуция источников, полнота ответа) + Level 2 (LLM-augmented семантические проверки). Safety-слой (L1) не зависит от галлюцинаций LLM.
 
 ### ADR-5: SQLite для хранения кейсов
 
@@ -34,7 +34,7 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 Чтобы система соответствовала позиционированию «агентная», но не теряла предсказуемости и safety, выбран гибридный дизайн:
 
-- **Rule-based safety floor:** Policy, Critic level 1 (5 проверок), determination статуса в Persister, conditional edges по результатам — всё детерминированное. Эти слои защищают от галлюцинаций LLM и делают систему тестируемой.
+- **Rule-based safety floor:** Policy, Critic level 1 (2 структурные проверки: атрибуция источников, полнота ответа), determination статуса в Persister, conditional edges по результатам — всё детерминированное. Эти слои защищают от галлюцинаций LLM и делают систему тестируемой.
 - **LLM-driven refinement loops поверх floor:** два места, где LLM реально управляет выполнением, а не только парсит/синтезирует:
   1. **Adaptive RAG** (`rag_refine`, см. `specs/agent-orchestrator.md` §3.7) — LLM формулирует уточнённый RAG-запрос на основе critic issues и инициирует повторный retrieval. Bounded: max 2 итерации.
   2. **LLM-augmented critic** (level 2, см. `specs/observability-evals.md` §4.4) — LLM проверяет смысловую консистентность объяснения с числами/документами, дополняя rule-based проверки.
@@ -163,7 +163,7 @@ START
 
 - **Rule-based policy-check:** блокирует недопустимые интервенции до вызова synthesis
 - **Degraded execution:** PSM, RAG и Graph могут падать независимо; кейс продолжается с пониженной уверенностью. Если все 3 недоступны — abort (`no_evidence`)
-- **Critic / guardrail:** проверяет числовую консистентность, атрибуцию источников, валидность рёбер графа, хеджирование и полноту ответа
+- **Critic / guardrail:** Level 1 (rule-based) проверяет атрибуцию источников и полноту ответа; Level 2 (LLM-augmented) проверяет логическую консистентность, соответствие фактам, адекватность хеджирования и полноту рекомендаций
 
 Safe failure policy:
 - максимум `1` retry на этапе synthesis после critic fail;
