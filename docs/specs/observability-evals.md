@@ -24,7 +24,7 @@
 | Метрика | Target (PoC) | Как измерять |
 |---------|-------------|--------------|
 | p95 latency | SLO ≤ 5 мин, target ≤ 3 мин | Расчёт в коде: сортировка `latency_ms`, 95-й перцентиль |
-| Cost per case | < $1 | LangSmith: token usage × pricing |
+| Cost per case | < $1 | Оценка token usage × pricing по модели. В v1 нет автоматического сбора — считается вручную по логам LLM-вызовов |
 | % успешных tool calls | > 90% | Loguru: подсчёт ошибок по module |
 | Error rate | < 5% | `SELECT count(*) FROM cases WHERE status = 'aborted'` |
 
@@ -69,15 +69,11 @@ logger.add(
 
 **Не логируется** (governance.md §2): сырые PII, полные тексты промптов/RAG-документов, API-ключи.
 
-## 3. Трейсинг (LangSmith)
+## 3. Трейсинг
 
-```bash
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=lsv2_...
-LANGCHAIN_PROJECT=uplift-agent-poc
-```
+В v1 внешний trace-бекенд **не подключён**. Observability строится на Loguru-логах (§2) и SQLite audit trail (`memory-context.md §3`): каждому кейсу соответствует строка в `cases` с `case_id`, статусом, latency, critic-issues и полным контекстом/результатом.
 
-Один trace = один кейс. LangGraph автоматически создаёт spans для каждого node. `trace_id` сохраняется в `cases.trace_id` для навигации SQLite → LangSmith. Free tier: 5000 traces/мес. При превышении — трейсинг отключается, Loguru продолжает работать.
+Поле `CaseState.trace_id` и колонка `cases.trace_id` зарезервированы в схеме, но в v1 остаются `NULL` — ожидают подключения внешнего tracing-бекенда (LangSmith, OpenTelemetry, Langfuse или аналог) в v2. Архитектура к этому готова: интеграция добавляется одной точкой внутри `Pipeline.run` (создать trace в начале, прокинуть `trace_id` в state перед persist).
 
 ## 4. Evaluation Framework
 
@@ -178,9 +174,10 @@ LANGCHAIN_PROJECT=uplift-agent-poc
 
 ## 6. Health Checks
 
-| Компонент | Проверка при старте | При недоступности в runtime |
-|-----------|--------------------|-----------------------------|
-| LLM API | Ping (простой вызов) | Abort с `llm_unavailable` |
-| FAISS Index | Файл существует | RAG в degraded mode (`rag_chunks = []`) |
-| Embeddings | Файл существует + загрузка | RAG в degraded mode (`rag_chunks = []`) |
-| SQLite | CREATE TABLE / SELECT 1 | Cooldown пропускается (fail-open, `requires_human_review = True`). Persist невозможен — только Loguru. |
+| Компонент | Проверка при старте (v1) | При недоступности в runtime |
+|-----------|---------------------------|-----------------------------|
+| OpenAI API key | Наличие `OPENAI_API_KEY` в окружении / `.env` (в `app/run.py`) | Исключение из LangChain-клиента ловится внешним `try/except` → abort с `pipeline_error` |
+| Синтетический датасет (CSV) | `cfg.synthetic_clients_path.exists()` в `app/run.py` | Entry-point завершает работу с ошибкой |
+| SQLite | `CREATE TABLE IF NOT EXISTS` при инициализации `CaseStore` | Cooldown пропускается (fail-open, `requires_human_review = True`); persist невозможен — только Loguru |
+| FAISS Index / Embeddings | Проверка отложена до первого вызова RAG (ленивая инициализация) | RAG в degraded mode (`rag_chunks = []`) |
+| LLM API ping | **planned v2** — в v1 не выполняется | — |

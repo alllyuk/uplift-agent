@@ -2,13 +2,15 @@
 
 ## 1. Ключевые архитектурные решения
 
-### ADR-1: LangGraph для оркестрации
+### ADR-1: Собственный orchestrator (plain Python) для v1
 
-Оркестрация на **LangGraph** — библиотека графов состояний поверх LangChain. Каждый шаг (intake, policy, estimation, synthesis, critic) — отдельный node с conditional edges. Нативная поддержка параллельных вызовов (PSM + RAG + Graph), интеграция с LangSmith, retry и routing «из коробки».
+Оркестрация в v1 — собственный `Pipeline` (`sme_causal/orchestrator/pipeline.py`) на plain Python поверх LangChain-клиентов LLM. Каждый шаг (intake, policy, estimation, synthesis, critic, rag_refine, persist) — метод класса; параллельный запуск PSM + RAG + Graph выполняется через `ThreadPoolExecutor`; условные переходы и retry — обычные `if/else` поверх `CaseState`.
+
+Готовые фреймворки агентных графов (LangGraph, LangChain agents и т.п.) в v1 намеренно не подключаются: минимизируем внешние зависимости, сохраняем полный контроль над state transitions и отладкой. Переход на LangGraph — кандидат v2, если потребуется declarative routing, native parallel branching или нативная интеграция с trace-сервисами.
 
 ### ADR-2: PSM как детерминированный модуль
 
-PSM-модуль (`CausalInferenceAnalyzer`, `PSMResult`) — самостоятельный компонент для количественной оценки эффекта (ATE/ATT, greedy 1:1 матчинг, caliper, auto-detect ковариат). Оборачивается как LangGraph tool node. Каузальная оценка — детерминированная задача, не требует LLM.
+PSM-модуль (`CausalInferenceAnalyzer`, `PSMResult`) — самостоятельный компонент для количественной оценки эффекта (ATE/ATT, greedy 1:1 матчинг, caliper, auto-detect ковариат). Вызывается из шага `estimation` pipeline через тонкий wrapper `inference/psm_runner.py`. Каузальная оценка — детерминированная задача, не требует LLM.
 
 ### ADR-3: Причинно-следственный граф как источник структурного контекста
 
@@ -22,9 +24,9 @@ DAG причинно-следственных связей между призн
 
 Одна таблица `cases`: case_id, client_id, request/context/result как JSON, status, trace_id, timestamps. PoC-масштаб, минимум инфраструктуры. Используется также для cooldown-проверки в policy_check.
 
-### ADR-6: LangSmith (free tier) + Loguru
+### ADR-6: Loguru для логирования (LLM-трейсинг — v2)
 
-LangSmith free tier (5000 traces/мес) для трейсинга LangGraph. Loguru для локальных структурированных логов и audit. Подробнее: `specs/observability-evals.md`.
+В v1 observability строится только на Loguru: локальные структурированные логи и audit trail кейсов в SQLite. Внешний trace-сервис (LangSmith или аналог) в v1 не подключён — поле `CaseState.trace_id` зарезервировано в схеме, но не заполняется. Подключение tracing-бекенда — кандидат v2; архитектура к этому готова (одна точка интеграции в Pipeline). Подробнее: `specs/observability-evals.md`.
 
 ### ADR-7: FAISS + e5-small для RAG
 
@@ -47,18 +49,22 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 ## 2. Модули
 
+Все шаги ниже — методы единого класса `Pipeline` (`sme_causal/orchestrator/pipeline.py`), работающие на shared `CaseState`.
+
 | # | Модуль | Роль | Реализация |
 |---|--------|------|------------|
-| 1 | Case Intake & Router | Приём запроса, определение client_id и intervention_delta | LangGraph node. Few-shot LLM для NL, прямое заполнение для Streamlit. |
-| 2 | Client Context Retriever | Загрузка профиля из CSV | LangGraph node. 25 полей по client_id. |
-| 3 | Policy & Eligibility | Блокировка невалидных интервенций | LangGraph node. Rule-based: дубликаты, лимиты, cooldown. |
-| 4 | Causal Estimation | PSM: ATE/ATT | LangGraph tool node. Greedy 1:1 matching, caliper, auto-detect. |
-| 5 | Causal Graph | Причинно-следственные связи между признаками | LangGraph tool node. Загрузка DAG из JSON, фильтрация по confidence → DSL для промпта. |
-| 6 | Evidence Retrieval | RAG: поиск банковских документов | LangGraph tool node. FAISS + e5-small, top_k. |
-| 7 | Critic / Guardrail | Пост-генерационные проверки | LangGraph node. **2 уровня:** 5 rule-based + LLM-augmented смысловые проверки. |
-| 8 | Intervention Synthesizer | Генерация Explanation через LLM | LangGraph node. Промпт-шаблоны + JSON/text fallback. |
-| 9 | RAG Refiner | LLM-driven переформулировка RAG-запроса | LangGraph node. Запускается между critic fail и retry-synthesize, max 1 итерация. |
-| 10 | Case State & Memory | Персистентность кейсов | SQLite `cases`. Audit + cooldown. |
+| 1 | Case Intake & Router | Приём запроса, определение client_id и intervention_delta | Шаг pipeline. Few-shot LLM (`QueryParser`) для NL-запросов, прямое заполнение из Streamlit/CLI. |
+| 2 | Client Context Retriever | Загрузка профиля из CSV | Шаг pipeline. 25 полей по client_id. |
+| 3 | Policy & Eligibility | Блокировка невалидных интервенций | Шаг pipeline. Rule-based (`core.utils.sanity_checks`) + cooldown через SQLite. |
+| 4 | Causal Estimation | PSM: ATE/ATT | Вызывается из шага `estimation` через `inference/psm_runner.py`. Greedy 1:1 matching, caliper, auto-detect. |
+| 5 | Causal Graph | Причинно-следственные связи между признаками | Загружается из `estimation` через `CausalAgent._load_graph_dsl`. DAG из JSON, фильтрация по confidence → DSL для промпта. |
+| 6 | Evidence Retrieval | RAG: поиск банковских документов | Вызывается из `estimation` через `rag.rag_pipeline.RAG.perform_query`. FAISS + e5-small, top_k. |
+| 7 | Critic / Guardrail | Пост-генерационные проверки | Шаг pipeline (`orchestrator.critic.run_critic`). **2 уровня:** 2 rule-based проверки + LLM-augmented смысловые проверки (4 категории L1–L4). |
+| 8 | Intervention Synthesizer | Генерация Explanation через LLM | Шаг pipeline (`CausalAgent.explain_what_if`). Промпт-шаблоны + JSON/text fallback. |
+| 9 | RAG Refiner | LLM-driven переформулировка RAG-запроса | Шаг pipeline (`orchestrator.rag_refine`). Запускается между critic fail и retry-synthesize, max 1 итерация. |
+| 10 | Case State & Memory | Персистентность кейсов | SQLite `cases` (`orchestrator.persistence.CaseStore`). Audit + cooldown. |
+
+`estimation` запускает PSM + RAG + Graph параллельно через `ThreadPoolExecutor` (по одному worker на источник); каждый источник может упасть независимо → degraded mode, без остановки кейса.
 
 ---
 
@@ -66,7 +72,7 @@ RAG: чанкинг → embedding (`multilingual-e5-small`, 384-dim) → FAISS `
 
 ### 3.1 CaseState
 
-Все данные между узлами LangGraph передаются через единый `CaseState`. На уровне системного дизайна важны 5 групп полей:
+Все данные между шагами pipeline передаются через единый `CaseState` (`TypedDict` в `orchestrator/state.py`), живущий в памяти процесса на время одного кейса. На уровне системного дизайна важны 5 групп полей:
 
 - **Идентификация:** `case_id`, `client_id`, `raw_query`
 - **Контекст кейса:** `client_context`, `intervention_delta`
@@ -115,20 +121,20 @@ START
 **Ключевые моменты:**
 - **policy_check** включает cooldown через SQLite (30 дней). При недоступности SQLite — fail-open с `requires_human_review = True`.
 - **estimation** — параллельный запуск PSM + RAG + Graph. Каждый может fail независимо → degraded mode. Если все 3 источника недоступны — abort с `no_evidence` (синтез без данных не имеет смысла).
-- **PSM** — при `n_pairs < 50` возвращает `ok=False` (числа доступны, но ненадёжны).
-- **critic_check** — 2 уровня: 5 rule-based проверок + LLM-augmented смысловые проверки. Макс. 1 retry, перед retry запускается `rag_refine`.
+- **PSM** — при `n_treated < 100` или `n_control < 100` возвращает `ok=True, psm_reliable=False` (расчёт прошёл, но матч-выборка слишком мала — числа доступны, но ненадёжны). Порог `PSM_MIN_GROUP_SIZE = 100` в `inference/psm_runner.py`.
+- **critic_check** — 2 уровня: 2 rule-based проверки (атрибуция источников, полнота ответа) + LLM-augmented смысловые проверки (4 категории L1–L4 в одном LLM-вызове). Макс. 1 retry, перед retry запускается `rag_refine`.
 - **rag_refine** — LLM формулирует уточнённый RAG-запрос на основе critic issues, делает повторный retrieval (max `rag_iterations = 2`). Это первая точка реального LLM-driven control flow в системе (см. ADR-8).
 
 ---
 
 ## 4. State / Memory
 
-`CaseState` живёт в памяти LangGraph только на время одного кейса. Агент не использует прошлые кейсы как memory для новых оценок; SQLite нужен для audit trail и cooldown safety-check.
+`CaseState` живёт в памяти Pipeline только на время одного кейса. Агент не использует прошлые кейсы как memory для новых оценок; SQLite нужен для audit trail и cooldown safety-check.
 
 Ключевые решения:
 - **Персистентность:** одна таблица `cases` в SQLite для результата кейса, статуса, review-маркеров и `trace_id`
 - **Контекстный бюджет:** около `~5000` input tokens на LLM-вызов; порядок сокращения при переполнении: `RAG → Graph DSL → PSM-summary`
-- **Retention:** `SQLite cases = 365 дней`, `Loguru = 90 дней`, `LangSmith` — по политике внешнего сервиса
+- **Retention:** `SQLite cases = 365 дней`, `Loguru = 90 дней`. Внешний trace-бекенд в v1 не подключён
 
 Полная схема SQLite, cooldown-query, TTL и PII-политика вынесены в `specs/memory-context.md`.
 
@@ -168,7 +174,8 @@ START
 Safe failure policy:
 - максимум `1` retry на этапе synthesis после critic fail;
 - при неустранимой ошибке или слабой уверенности выставляется `requires_human_review = True`;
-- типовые триггеры: `status == degraded`, `|ATT| < 0.001` при слабых данных, critic fail после retry, недоступность SQLite при cooldown.
+- типовые триггеры (v1): critic fail после retry, недоступность SQLite при cooldown-проверке;
+- планируемые триггеры (v2): `status == degraded` из-за tool fails, `|ATT| < 0.001` при слабых данных.
 
 Полный набор failure modes, critic-checks и observability-метрик вынесен в `specs/observability-evals.md` и `governance.md`.
 
@@ -225,4 +232,4 @@ Single-user, in-process Streamlit, SQLite (single-writer), FAISS in-memory, од
 5. FAISS → Milvus / Weaviate
 6. Multi-worker deployment (Kubernetes / docker-compose)
 
-Каждый шаг — отдельная итерация; LangGraph и rule-based слои (Policy, Critic) переносятся без изменений.
+Каждый шаг — отдельная итерация; Pipeline-класс и rule-based слои (Policy, Critic) переносятся без изменений.

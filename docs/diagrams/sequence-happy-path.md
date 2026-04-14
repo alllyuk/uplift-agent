@@ -7,7 +7,7 @@ Sequence diagram для основного сценария «оценка за�
 ```mermaid
 sequenceDiagram
     actor Analyst as Аналитик
-    participant Agent as Agent Service<br/>(LangGraph)
+    participant Agent as Agent Service<br/>(Pipeline)
     participant Tools as Local Tools<br/>(PSM, RAG, Graph)
     participant DB as SQLite
     participant LLM as OpenAI API

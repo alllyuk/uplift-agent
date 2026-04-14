@@ -2,7 +2,9 @@
 
 ## 1. Обзор
 
-LangGraph Orchestrator — центральный компонент. Управляет выполнением кейса через граф состояний: приём запроса → координация модулей (Policy, PSM, RAG, LLM) → проверка через Critic → сохранение в SQLite.
+Pipeline Orchestrator — центральный компонент v1, реализованный как plain-Python класс `Pipeline` в `sme_causal/orchestrator/pipeline.py`. Управляет выполнением кейса через последовательность методов, работающих на shared `CaseState`: приём запроса → координация модулей (Policy, PSM, RAG, LLM) → проверка через Critic → сохранение в SQLite.
+
+Готовые фреймворки агентных графов (LangGraph и т.п.) в v1 намеренно не используются — см. ADR-1 в `system-design.md`.
 
 ## 2. CaseState
 
@@ -19,6 +21,7 @@ class CaseState(TypedDict):
 
     # Policy
     policy_result: dict                             # {blocked, reasons, notes}
+    cooldown_previous_case: Optional[dict]          # {case_id, created_at, explanation, raw_query} — если cooldown сработал
 
     # Estimation
     psm_result: Optional[dict]                      # {ok, ate, att, n_pairs} или None
@@ -52,16 +55,48 @@ class CaseState(TypedDict):
 
 ## 3. Узлы (nodes)
 
+### 3.0 Публичный API Pipeline
+
+```python
+Pipeline(
+    df,
+    *,
+    case_store=None,
+    graph_method="llm",        # llm | algo | hybrid | algo_llm
+    use_rag=True,
+    use_graph=True,
+    use_psm=True,
+    outcome_col="Revenue_Growth_Rate",
+    covariates=None,
+    caliper=0.05,
+    min_conf=0.45,
+    model=None,
+    temperature=None,
+).run(
+    client_id,
+    intervention_delta,
+    *,
+    raw_query=None,
+    target_metric=None,        # переопределяет outcome_col для конкретного кейса
+    match_info=None,
+) -> CaseState
+```
+
+- **`target_metric`** в `run()` позволяет переопределить outcome-колонку для PSM и synthesize-промпта в рамках одного кейса (используется QueryParser для NL-запросов с явным указанием метрики). Если `target_metric is None`, используется `outcome_col`, заданный в конструкторе (`Revenue_Growth_Rate` по умолчанию).
+- **Флаги `use_psm` / `use_rag` / `use_graph`** выключают соответствующую под-задачу `estimation`. Если все три выключены одновременно, guard `sources_requested` в `Pipeline.run` пропускает проверку `no_evidence` — кейс продолжается только с профилем клиента и delta (применимо для целей отладки / smoke-тестов без боковых зависимостей).
+- **`match_info`** — структура, возвращаемая `QueryParser` (см. §7), прокидывается в synthesize-промпт, чтобы LLM могла хеджировать формулировку при неточном совпадении интервенции по NL-запросу.
+
 ### 3.1 intake
 
-- **Structured input** (Streamlit) → прямое заполнение `client_id`, `intervention_delta`
-- **NL-запрос** → few-shot LLM prompt → `ParsedQuery` (client_id, delta, match_info)
-- Генерация `case_id` (UUID4), `retry_count = 0`
-- Ошибка парсинга или отсутствие интервенции → abort с `parse_error` / `missing_intervention`
+NL-парсинг выполняется **до** `Pipeline.run` — в entry-points (`app/run.py`, `app/streamlit_app.py`) через `QueryParser` (few-shot LLM, §7) и `parse_client_id_and_intent` (regex-извлечение `client_id`). На вход `Pipeline.run` поступают уже структурированные `client_id` и `intervention_delta`. Ошибки парсинга NL-запроса (невалидный текст, неразрешимая интервенция) обрабатываются в entry-point и до pipeline не доходят.
+
+Внутри `Pipeline._intake`:
+- Генерируется `case_id` (UUID4), `retry_count = 0` (через `create_case_state`)
+- Проверяется наличие `client_id` в загруженном DataFrame — при отсутствии abort с `abort_reason = "client_not_found"`
 
 ### 3.2 load_context
 
-Загрузка строки из CSV по `client_id` → dict из 25 полей профиля. Не найден → abort с `not_found`.
+Загрузка строки из CSV по `client_id` через `CausalAgent.build_context_for_client` → dict из 25 полей профиля (`CONTEXT_FIELDS`). Не найден → abort с `abort_reason = "client_not_found"`.
 
 ### 3.3 policy_check
 
@@ -76,11 +111,13 @@ Rule-based проверки допустимости:
 
 Результат: `{blocked: bool, reasons: [str], notes: dict}`
 
+**Cooldown UX:** при срабатывании cooldown `_policy_check` прикрепляет к `CaseState.cooldown_previous_case` поля предыдущего завершённого кейса — `{case_id, created_at, explanation, raw_query}` (JSON-поле `result_json` парсится вспомогательным `_safe_json`). Entry-points (`app/run.py`, `app/streamlit_app.py`) отрисовывают этот объект как подсказку «эта интервенция уже оценивалась …, показан предыдущий результат» вместо пустого ответа на abort.
+
 **Переходы:** `blocked` → abort | иначе → estimation
 
 ### 3.4 estimation (параллельный)
 
-Три sub-task через LangGraph parallel branching:
+Три sub-task параллельно через `ThreadPoolExecutor` (по одному worker на источник):
 
 | Sub-task | Input | Output | При ошибке |
 |----------|-------|--------|------------|
@@ -98,7 +135,7 @@ Rule-based проверки допустимости:
 4. LLM вызов: JSON mode → text fallback → regex-парсинг
 5. Парсинг в Explanation: `{diagnosis, drivers_pos, drivers_neg, expected_effect, recommendations, raw_text}`
 
-Ошибка: LLM timeout после retry → abort с `llm_timeout`.
+Ошибка: любое LLM-исключение ловится в `Pipeline.run` внешним `try/except` и приводит к abort с `abort_reason = "pipeline_error: …"`.
 
 ### 3.6 critic_check
 
@@ -146,10 +183,10 @@ Rule-based проверки допустимости:
 1. Вычисление `latency_ms`
 2. Определение `status`: done / aborted / degraded
 3. Определение `requires_human_review`:
-   - `status == "degraded"` (tool fails)
-   - Critic fail после retry
-   - `|ATT| < 0.001` и мало matched pairs
-   - SQLite был недоступен при cooldown-проверке
+   - Critic fail после retry (v1)
+   - SQLite был недоступен при cooldown-проверке (v1)
+   - `status == "degraded"` из-за tool fails — **planned v2**
+   - `|ATT| < 0.001` и мало matched pairs — **planned v2**
 4. INSERT в SQLite (если доступен), логирование через Loguru
 
 ## 4. Stop conditions
@@ -169,8 +206,8 @@ Rule-based проверки допустимости:
 | `rag_iterations >= 2` | rag_refine больше не запускается |
 | PSM / RAG / Graph fail (частично) | Skip, degraded mode |
 | Все 3 источника недоступны | Abort с `no_evidence` |
-| PSM: `n_pairs < 50` | `ok=False`, числа доступны но ненадёжны |
-| LLM timeout | 1 retry, затем abort |
+| PSM: `n_treated < 100` или `n_control < 100` | `ok=True` (расчёт прошёл), но `psm_reliable=False` с пояснением в `psm_reason`. Порог — `PSM_MIN_GROUP_SIZE = 100` в `inference/psm_runner.py`. |
+| LLM-исключение в synthesize | Ловится внешним `try/except` в `Pipeline.run` → abort с `abort_reason = "pipeline_error: …"` |
 | SQLite недоступен | Cooldown skip (fail-open), persist skip, Loguru only |
 
 ## 6. Промпт-менеджмент
@@ -183,13 +220,27 @@ Rule-based проверки допустимости:
 
 ### 6.2 Версионирование
 
-- **Storage:** шаблоны лежат как файлы в `prompts/{name}/{version}.yaml` (например `prompts/whatif/v2.1.yaml`). YAML содержит `system`, `user`, и метаданные `version`, `created_at`, `parent_version`, `notes`.
+- **Storage:** метаданные версий лежат в `prompts/{name}/{version}.yaml` (например `prompts/whatif/v1.0.yaml`). YAML содержит `version`, `created_at`, `parent_version`, `notes`, список `variables` и указатель `source: {module, attribute}` на inline-шаблон в коде (`CausalAgent._prompt_base` / `_prompt_whatif`). Полный перенос текста промпта в YAML с runtime-загрузкой — задача v2.
 - **Naming:** семантическое `vMAJOR.MINOR`. MAJOR — несовместимое изменение схемы переменных, MINOR — текстовая правка.
-- **Активация:** активная версия выбирается через существующий `LLMConfig` (`specs/serving-config.md` §2.2) — поля `prompt_version_base`, `prompt_version_whatif`. По умолчанию — последний MAJOR.
-- **Логирование:** фактически использованные версии записываются в `CaseState.prompt_versions` и в SQLite (`cases.prompt_versions_json`) для аудита и воспроизводимости.
+- **Активация:** активная версия выбирается через `LLMConfig` (`specs/serving-config.md` §2.2) — поля `prompt_version_base`, `prompt_version_whatif`. По умолчанию — `v1.0`.
+- **Runtime-проверка:** `sme_causal/agent/prompt_registry.py::ensure_versions()` вызывается в `CausalAgent.__init__`. Если активная версия из config отсутствует в `prompts/<name>/`, поднимается `PromptVersionError` — опечатки в `LLM_PROMPT_VERSION_*` ловятся на старте, а не на первом synthesize.
+- **Публикация активных версий:** `CausalAgent.active_prompt_versions()` возвращает актуальный dict `{base, whatif}`; `Pipeline._synthesize` копирует его в `CaseState.prompt_versions` до первого LLM-вызова — результат уходит в SQLite (`cases.prompt_versions_json`).
 - **Rollback:** смена версии в config + рестарт сервиса. Старые версии не удаляются — остаются в репозитории и могут быть включены обратно.
-- **PoC scope:** 2 шаблона (`base`, `whatif`), смена редкая, без автоматического prompt registry. Production-grade registry — out of scope.
+- **PoC scope:** 2 шаблона (`base`, `whatif`), смена редкая, без автоматической runtime-загрузки текста из YAML. Production-grade registry — out of scope.
 
-## 7. QueryParser
+## 7. QueryParser и извлечение client_id
 
-Few-shot LLM prompt для парсинга NL-запроса → `ParsedQuery`: client_id, delta, match_info (маркер "similar" для неточных совпадений). Если интервенция не извлекается надёжно, кейс не запускается.
+**`parse_client_id_and_intent`** (`sme_causal/core/utils.py`) — regex-извлечение идентификатора клиента из NL-запроса. Паттерн `\b[CС]\d{6}\b` сопоставляет **и латинскую `C`, и кириллическую `С`** (визуально идентичны — пользователи часто переключают раскладку и не замечают). В возвращаемом `client_id` префикс нормализуется в латинскую `C`, чтобы дальнейший lookup по CSV (где ID генерируются с латинской `C`) не промахивался. Возвращает кортеж `(client_id | None, cleaned_text)` — текст запроса без ID идёт в `QueryParser` как intent.
+
+**`QueryParser`** (`sme_causal/agent/agent_service.py`) — few-shot LLM prompt для парсинга intent-части NL-запроса → `ParsedQuery`:
+
+| Поле | Назначение |
+|------|------------|
+| `action_type` | `"what_if"` (оценка заданной интервенции, запускает Pipeline) или `"optimize"` (диагностика профиля без delta, запускает `CausalAgent.explain_client` напрямую) |
+| `delta` | `intervention_delta` для Pipeline (`{"New_Product_Offer": 1, ...}`) |
+| `target_metric` | Обнаруженная в запросе целевая метрика — прокидывается в `Pipeline.run(..., target_metric=...)` (см. §3.0) |
+| `label` | Человекочитаемая метка типа запроса — отображается в UI/CLI |
+| `info_text` | Пояснение по парсингу для отображения в UI |
+| `match_info` | Маркер `confident` / `similar` по каждому ключу `delta` — сигнал для synthesize-промпта о неточном совпадении |
+
+Если интервенция не извлекается надёжно (`delta = {}` при `action_type = what_if`), кейс не запускается — entry-point показывает fallback-сообщение.

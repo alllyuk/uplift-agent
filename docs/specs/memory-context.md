@@ -3,7 +3,7 @@
 ## 1. Обзор
 
 Модуль управления состоянием и памятью:
-- Передача данных между узлами LangGraph (CaseState)
+- Передача данных между шагами Pipeline (CaseState)
 - Персистентное хранение завершённых кейсов (SQLite)
 - Контроль бюджета контекста для LLM-вызовов
 
@@ -14,7 +14,7 @@
 ```
 
 - `CaseState` (TypedDict) создаётся в `intake`, обогащается каждым узлом
-- Передаётся по ссылке через LangGraph — без сериализации между узлами
+- Передаётся по ссылке внутри Pipeline — без сериализации между шагами
 - Время жизни: от создания до завершения кейса (секунды–минуты)
 
 ### 2.1 Кросс-кейсовая память
@@ -42,11 +42,11 @@ CREATE TABLE IF NOT EXISTS cases (
     abort_reason  TEXT,
     requires_human_review BOOLEAN DEFAULT FALSE,
     review_reason TEXT,
-    trace_id      TEXT,                   -- LangSmith trace ID
+    trace_id      TEXT,                   -- Внешний trace ID (зарезервировано под v2, в v1 остаётся NULL)
     latency_ms    INTEGER,
     prompt_versions_json TEXT,            -- JSON: {"base": "v1.0", "whatif": "v2.1"}
     experiment_variant TEXT,              -- "A" | "B" | NULL — A/B-эксперимент, см. observability-evals §5
-    rag_iterations INTEGER DEFAULT 1,     -- 1 = только initial RAG; 2 = был rag_refine (см. agent-orchestrator §3.7)
+    rag_iterations INTEGER DEFAULT 0,     -- 0 = RAG не запускался (degraded); 1 = только initial; 2 = был rag_refine (см. agent-orchestrator §3.7)
     llm_critic_issues_json TEXT,          -- JSON: список issues от LLM-augmented critic (см. observability-evals §4.4)
     updated_at    TIMESTAMP
 );
@@ -63,7 +63,6 @@ CREATE INDEX idx_cases_created_at ON cases(created_at);
 | INSERT | После завершения кейса | persist node |
 | SELECT by case_id | Просмотр результата | UI / API |
 | SELECT by client_id + status | Cooldown-проверка (policy_check) и просмотр истории | policy_check node / UI |
-| DELETE (по retention) | TTL 365 дней | Cron / startup cleanup |
 
 ### 3.3 Cooldown-запрос
 
@@ -93,21 +92,20 @@ Concurrency: single-writer (PoC, один пользователь). Default jou
 | **Итого input** | **~4950** | |
 | **Output** | **~500–1000** | |
 
-**Защита:** модуль truncation — hard limit 2000 tokens/сообщение (tiktoken gpt2). При нехватке бюджета: сначала уменьшить RAG (top_k), затем убрать Graph DSL, затем PSM-summary. System prompt и профиль не сокращаются.
+Стратегия при переполнении бюджета (в v1 применяется вручную при изменении шаблонов): сначала уменьшить RAG (`top_k`), затем убрать Graph DSL, затем PSM-summary. System prompt и профиль не сокращаются. Автоматический token-truncation — планируется в v2.
 
 ## 5. Retention и PII
 
 | Тип данных | Срок | Примечание |
 |------------|------|------------|
-| SQLite `cases` | 365 дней | Audit trail по кейсу: запрос, контекст, результат, статус, `trace_id`, причины abort/review |
-| Loguru файлы | 90 дней | Технические логи: ошибки, latency, вызовы модулей, служебные статусы |
-| LangSmith traces | По политике free tier | Внешний сервис, не управляется локальным TTL |
+| SQLite `cases` | Без автоматического TTL в v1 | Audit trail по кейсу: запрос, контекст, результат, статус, `trace_id`, причины abort/review. Cleanup-процедура (TTL) — v2 |
+| Loguru файлы | 90 дней | Технические логи: ошибки, latency, вызовы модулей, служебные статусы. Реализовано через параметр `retention` loguru |
+| Внешний trace-бекенд | — | В v1 не подключён; при интеграции в v2 срок хранения определяется политикой выбранного сервиса |
 | CaseState (in-memory) | Время кейса | Освобождается после persist |
 
 Пояснение по retention:
-- `SQLite cases` хранится дольше, потому что используется как audit trail и как источник для cooldown-проверки.
-- `Loguru` хранится меньше, потому что это операционные логи для отладки и postmortem.
-- По истечении срока хранения SQLite-записи удаляются cleanup-процедурой, а Loguru-файлы — политикой `retention` в конфигурации.
+- `SQLite cases` используется как audit trail и как источник для cooldown-проверки; в v1 хранится без автоматической очистки.
+- `Loguru` — операционные логи для отладки и postmortem, ротация по размеру и удержание по времени настраиваются через loguru.
 
 Пояснение по PII:
 - прямые идентификаторы маскируются перед передачей в LLM;

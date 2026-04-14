@@ -51,9 +51,10 @@ class AppConfig(BaseSettings):
 | Секрет | Переменная | Хранение |
 |--------|-----------|----------|
 | OpenAI API Key | `OPENAI_API_KEY` | `.env` (gitignored) или env var |
-| LangSmith API Key | `LANGCHAIN_API_KEY` | `.env` или env var |
 
 Доступ: `OPENAI_API_KEY` из окружения или `.env`. `.env.example` — шаблон без реальных значений. Секреты не логируются.
+
+Внешние trace-сервисы (LangSmith и т.п.) в v1 не подключены — соответствующих ключей нет.
 
 ## 4. Версии моделей
 

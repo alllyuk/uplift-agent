@@ -2,17 +2,21 @@
 
 ## 1. Обзор и статус
 
-REST API — **planned контракт** для внешних интеграций (CRM, batch-вызовы, тестовые скрипты). В текущем PoC основной режим работы — Streamlit UI с in-process вызовом Agent Service (см. `diagrams/c4-container.md`). REST API реализуется как тонкая обёртка поверх существующего LangGraph orchestrator на FastAPI.
+> **Статус в v1: не реализовано.** REST API описан как планируемый контракт v2 для внешних интеграций (CRM, batch-вызовы, тестовые скрипты). В v1 единственные entry points — Streamlit UI и CLI (`sme_causal.app.run`), оба вызывают `Pipeline` in-process. Каталога `sme_causal/api/` и FastAPI-зависимостей в v1 нет.
+
+Когда REST будет реализован в v2, это будет тонкая обёртка поверх существующего `Pipeline` orchestrator на FastAPI; никаких изменений в ядре оркестратора не потребуется.
 
 ## 2. Endpoints
 
-| Метод | Путь | Назначение | Статус в PoC |
-|-------|------|-----------|--------------|
-| POST | `/v1/cases` | Создать кейс (sync или async) | реализуется |
-| GET | `/v1/cases/{case_id}` | Получить результат кейса | реализуется |
-| GET | `/v1/cases?client_id=...&status=...` | Список кейсов клиента | planned |
-| GET | `/v1/clients/{client_id}` | Профиль клиента (read-only) | planned |
-| GET | `/v1/health` | Health-check компонентов | реализуется |
+Все эндпоинты ниже — **planned для v2**, в v1 не доступны.
+
+| Метод | Путь | Назначение | Статус |
+|-------|------|-----------|--------|
+| POST | `/v1/cases` | Создать кейс (sync или async) | planned v2 |
+| GET | `/v1/cases/{case_id}` | Получить результат кейса | planned v2 |
+| GET | `/v1/cases?client_id=...&status=...` | Список кейсов клиента | planned v2 |
+| GET | `/v1/clients/{client_id}` | Профиль клиента (read-only) | planned v2 |
+| GET | `/v1/health` | Health-check компонентов | planned v2 |
 
 ### 2.1 POST /v1/cases
 

@@ -29,7 +29,6 @@ flowchart TD
 
     subgraph EXTERNAL ["External Services"]
         OPENAI["OpenAI API"]
-        LANGSMITH["LangSmith"]
         LOGS["Loguru Logs"]
     end
 
@@ -63,11 +62,6 @@ flowchart TD
     EVIDENCE -.-> LOGS
     CRITIC -.-> LOGS
     RESULT -.-> LOGS
-
-    INTAKE -.-> LANGSMITH
-    SYNTH -.-> LANGSMITH
-    CRITIC -.-> LANGSMITH
-    RESULT -.-> LANGSMITH
 ```
 
 ## Формат данных на каждом этапе

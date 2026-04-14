@@ -70,7 +70,7 @@ LLM в проекте отвечает за оркестрацию и объяс
 ## Тех. стек
 
 - **Python 3.11** — основной язык
-- **LangGraph** — оркестрация агента (поверх LangChain)
+- **Собственный orchestrator** (plain Python + `ThreadPoolExecutor`) поверх LangChain-клиентов LLM. Готовые фреймворки агентных графов (LangGraph и т.п.) в v1 не используются — выбран минимальный dependency footprint
 - **OpenAI API** (этап разработки) → собственные модели в контуре заказчика
 - **FAISS + sentence-transformers** (`intfloat/multilingual-e5-small`) — RAG / retrieval
 - **Streamlit** — UI для демо
@@ -86,9 +86,20 @@ LLM в проекте отвечает за оркестрацию и объяс
 - [Sequence: Happy Path](docs/diagrams/sequence-happy-path.md) — sequence diagram основного успешного сценария
 - [Data Flow](docs/diagrams/data-flow.md) — потоки данных
 
+## Как запустить
+
+Полная инструкция по запуску и деплою — в [QUICKSTART.md](QUICKSTART.md):
+
+- end-to-end через Docker (без локального Python);
+- альтернативный путь через локальный venv;
+- подготовка подложки (синтетика + причинный граф + RAG-индекс);
+- запуск CLI-кейсов и Streamlit-UI;
+- советы по деплою на удалённый сервер.
+
 ## Репозиторий
 
 - `README.md` — краткое описание проекта и scope PoC
+- [`QUICKSTART.md`](QUICKSTART.md) — запуск и деплой: Docker (рекомендуется), локальный venv, конфигурация, артефакты
 - `docs/product-proposal.md` — продуктовая постановка, цель, метрики и сценарии использования
 - `docs/system-design.md` — обзор архитектуры PoC-системы
 - `docs/diagrams/` — C4-диаграммы, workflow и data flow
