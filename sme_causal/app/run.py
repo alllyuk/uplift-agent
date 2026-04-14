@@ -2,7 +2,7 @@ import sys
 import argparse
 import json as _json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import pandas as pd
 import numpy as np
@@ -10,13 +10,12 @@ from loguru import logger
 
 from sme_causal.agent.agent_service import CausalAgent, Explanation, QueryParser, ParsedQuery
 from sme_causal.core.config import get_config
-from sme_causal.core.utils import configure_logging, sanity_checks, parse_client_id_and_intent
+from sme_causal.core.utils import configure_logging, parse_client_id_and_intent
 from sme_causal.core.columns import (
     CLIENT_ID,
     NEW_PRODUCT_OFFER,
     NEW_PRODUCT_OFFER_TYPE,
 )
-from sme_causal.inference.psm_runner import run_psm
 from sme_causal.orchestrator.pipeline import Pipeline
 from sme_causal.orchestrator.persistence import CaseStore
 
@@ -135,27 +134,12 @@ def main() -> None:
         help="Default outcome column for PSM (if not extracted from query)",
     )
     parser.add_argument(
-        "--treatment-col",
-        type=str,
-        default=None,
-        help="Treatment column for PSM (default: infer from delta)",
-    )
-    parser.add_argument(
         "--covariates",
         type=str,
         default="",
         help="Comma-separated covariates (default: heuristic set)",
     )
     parser.add_argument("--psm-caliper", type=float, default=0.05, help="PSM caliper")
-    parser.add_argument(
-        "--psm-match-ratio", type=int, default=1, help="PSM match ratio"
-    )
-    parser.add_argument(
-        "--psm-threshold",
-        type=float,
-        default=None,
-        help="Binarization threshold for non-binary treatment",
-    )
 
     args = parser.parse_args()
     if args.debug_json:
@@ -255,6 +239,11 @@ def main() -> None:
     # CLI arg takes precedence over extracted ID
     client_id = args.client_id or extracted_client_id
 
+    # Normalize Cyrillic 'С' to Latin 'C' so that --client-id "С000005"
+    # (which looks identical to "C000005") also matches dataset rows.
+    if isinstance(client_id, str) and client_id[:1] in ("С", "с"):
+        client_id = "C" + client_id[1:]
+
     if not client_id:
         # Fallback to first client if absolutely nothing is provided
         client_id = df[CLIENT_ID].iloc[0]
@@ -264,40 +253,8 @@ def main() -> None:
         logger.error(f"Client_ID not found in dataset: {client_id}")
         sys.exit(3)
 
-    # 6. Build Context & Run Sanity Checks
+    # 6. Build Context (policy checks are handled inside Pipeline._policy_check)
     ctx = agent.build_context_for_client(df, client_id)
-
-    # Checks only apply if we have a concrete delta to check
-    checks_result = {"blocked": False, "reasons": []}
-    if delta:
-        checks_result = sanity_checks(ctx, delta)
-
-    # If blocked by sanity checks
-    if checks_result["blocked"]:
-        msg = "Intervention blocked by rule-based sanity checks. It has conflict with currect client features."
-        if args.json:
-            payload = {
-                "client_id": client_id,
-                "action_type": action_type,
-                "context": ctx,
-                "what_if": {
-                    "delta": delta,
-                    "explanation": {
-                        "summary": msg,
-                        "reasons": checks_result["reasons"],
-                        "uplift": 0.0,
-                    },
-                },
-            }
-            print(_json.dumps(_json_safe(payload), ensure_ascii=False, indent=2, allow_nan=False))
-        else:
-            logger.info("--------------------------------")
-            logger.info(f"What-if scenario: {delta}")
-            logger.warning(msg)
-            for r in checks_result["reasons"]:
-                logger.info("• %s", r)
-            logger.info("=> Expected Uplift: 0.0")
-        return
 
     # 7. Execution Logic based on Action Type
 
@@ -352,13 +309,6 @@ def main() -> None:
         temperature=cfg.llm.temperature,
     )
 
-    # Baseline Diagnosis (separate from pipeline, for backward-compatible output)
-    expl_baseline: Explanation = agent.explain_client(
-        ctx,
-        use_graph=use_graph,
-        target_metric=target_metric,
-    )
-
     # Run pipeline
     case_state = pipeline.run(
         client_id,
@@ -387,7 +337,6 @@ def main() -> None:
                 "detected_target": target_metric,
             } if args.query else None,
             "context": ctx,
-            "baseline_diagnosis": expl_baseline.to_dict(include_debug=args.debug_json),
             "what_if": {
                 "delta": delta,
                 "analysis": explanation,
@@ -399,6 +348,10 @@ def main() -> None:
         }
         if case_state.get("abort_reason"):
             payload["abort_reason"] = case_state["abort_reason"]
+        if case_state.get("abort_reason") == "policy_blocked":
+            payload["policy_result"] = case_state.get("policy_result", {})
+        if case_state.get("cooldown_previous_case"):
+            payload["cooldown_previous_case"] = case_state["cooldown_previous_case"]
         print(_json.dumps(_json_safe(payload), ensure_ascii=False, indent=2, allow_nan=False))
     else:
         logger.info(f"=== Analysis for {client_id} (case={case_state.get('case_id', '?')[:8]}) ===")
@@ -407,11 +360,27 @@ def main() -> None:
         if match_info:
             logger.info(f"Param matching info: {match_info}")
 
-        logger.info("--- Baseline Diagnosis ---")
-        logger.info(expl_baseline)
-
         if status == "aborted":
-            logger.warning(f"Case aborted: {case_state.get('abort_reason')}")
+            prev = case_state.get("cooldown_previous_case")
+            abort_reason = case_state.get("abort_reason")
+            if abort_reason == "policy_blocked" and prev:
+                logger.info(
+                    "♻️ Эта интервенция уже оценивалась {} (кейс {}). Показан предыдущий результат:",
+                    prev.get("created_at", "?"),
+                    (prev.get("case_id") or "")[:8],
+                )
+                prev_expl = prev.get("explanation") or {}
+                for key in ("diagnosis", "drivers_pos", "drivers_neg", "recommendations", "expected_effect"):
+                    val = prev_expl.get(key)
+                    if val:
+                        logger.info(f"  {key}: {val}")
+            elif abort_reason == "policy_blocked":
+                logger.warning("Intervention blocked by policy checks:")
+                for r in case_state.get("policy_result", {}).get("reasons", []):
+                    logger.info(f"  • {r}")
+                logger.info("=> Expected Uplift: 0.0")
+            else:
+                logger.warning(f"Case aborted: {abort_reason}")
         else:
             logger.info("--- What-if Scenario ---")
             logger.info(f"Delta: {delta}")
