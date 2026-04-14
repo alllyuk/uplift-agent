@@ -21,7 +21,10 @@ class CaseStore:
     def __init__(self, db_path: Path) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
-        self._conn = sqlite3.connect(str(db_path))
+        # check_same_thread=False: Streamlit reruns/ThreadPoolExecutor may
+        # touch the connection from different threads. Writes remain serial
+        # (Pipeline.run is synchronous), so this is safe.
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._ensure_schema()
 
@@ -48,7 +51,7 @@ class CaseStore:
                 latency_ms    INTEGER,
                 prompt_versions_json TEXT,
                 experiment_variant TEXT,
-                rag_iterations INTEGER DEFAULT 1,
+                rag_iterations INTEGER DEFAULT 0,
                 llm_critic_issues_json TEXT,
                 updated_at    TIMESTAMP
             );
@@ -143,21 +146,34 @@ class CaseStore:
 
         Uses LIKE match on the first key of intervention_delta in request_json.
         """
+        return self.get_recent_done_case(client_id, intervention_delta, days) is not None
+
+    def get_recent_done_case(
+        self,
+        client_id: str,
+        intervention_delta: Dict[str, Any],
+        days: int = 30,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the most recent completed case matching cooldown criteria.
+
+        Returns None if cooldown does not apply (empty delta, no matching case).
+        """
         if not intervention_delta:
-            return False
+            return None
         first_key = next(iter(intervention_delta))
         pattern = f'%"{first_key}"%'
         row = self._conn.execute(
             """\
-            SELECT 1 FROM cases
+            SELECT * FROM cases
             WHERE client_id = ? AND status = 'done'
               AND request_json LIKE ?
               AND created_at > datetime('now', ? || ' days')
+            ORDER BY created_at DESC
             LIMIT 1
             """,
             (client_id, pattern, f"-{days}"),
         ).fetchone()
-        return row is not None
+        return dict(row) if row is not None else None
 
     # ------------------------------------------------------------------
     # Cleanup

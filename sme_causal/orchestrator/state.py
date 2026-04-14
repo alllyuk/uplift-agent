@@ -24,6 +24,7 @@ class CaseState(TypedDict, total=False):
 
     # Policy
     policy_result: Dict[str, Any]  # {blocked, reasons, notes}
+    cooldown_previous_case: Dict[str, Any]  # {case_id, created_at, explanation, raw_query} — if cooldown blocked
 
     # Estimation
     psm_result: Optional[Dict[str, Any]]  # {ok, ate, att, n_pairs} or None

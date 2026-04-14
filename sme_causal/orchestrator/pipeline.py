@@ -181,17 +181,25 @@ class Pipeline:
             checks = {"blocked": False, "reasons": [], "notes": []}
         state["policy_result"] = checks
 
-        # Cooldown check (fail-open on SQLite error)
+        # Cooldown check (fail-open on SQLite error).
+        # When cooldown triggers, attach the previous case so UI/CLI can show it.
         if self.case_store and not checks.get("blocked"):
             try:
-                if self.case_store.check_cooldown(
+                prev = self.case_store.get_recent_done_case(
                     state["client_id"], delta
-                ):
+                )
+                if prev is not None:
                     checks["blocked"] = True
                     checks.setdefault("reasons", []).append(
                         "Cooldown: аналогичная интервенция выполнена менее 30 дней назад"
                     )
                     state["policy_result"] = checks
+                    state["cooldown_previous_case"] = {
+                        "case_id": prev.get("case_id"),
+                        "created_at": prev.get("created_at"),
+                        "explanation": self._safe_json(prev.get("result_json")),
+                        "raw_query": prev.get("raw_query"),
+                    }
             except Exception:
                 logger.warning("Cooldown check failed (fail-open)")
                 state["requires_human_review"] = True
@@ -243,6 +251,10 @@ class Pipeline:
     ) -> None:
         """Call agent.explain_what_if with pre-fetched data."""
         state["status"] = "synthesis"
+        # Зафиксировать активные версии промптов до первого synthesize-вызова.
+        # Агент использует whatif-шаблон; base-шаблон идёт в _prompt_versions для полноты аудита.
+        if not state.get("prompt_versions"):
+            state["prompt_versions"] = self.agent.active_prompt_versions()
         ctx = state.get("client_context", {})
         delta = state.get("intervention_delta", {})
         psm = state.get("psm_result")
@@ -356,6 +368,17 @@ class Pipeline:
             state.get("requires_human_review", False),
         )
         return state
+
+    @staticmethod
+    def _safe_json(text: Optional[str]) -> Dict[str, Any]:
+        """Parse a JSON column value to dict; return empty dict on failure."""
+        if not text:
+            return {}
+        try:
+            import json as _json
+            return _json.loads(text)
+        except Exception:
+            return {}
 
     @staticmethod
     def _format_issues(state: CaseState) -> str:

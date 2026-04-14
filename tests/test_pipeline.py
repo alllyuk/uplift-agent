@@ -106,7 +106,7 @@ class TestPipelineHappyPath:
             use_graph=False,
             use_rag=True,
         )
-        state = pipeline.run("C000005", {"Tariff_Discount": 1})
+        state = pipeline.run("C000005", {"Tariff_Discount": 2})
 
         assert state["status"] in ("done", "degraded")
         assert state["client_id"] == "C000005"
@@ -117,6 +117,13 @@ class TestPipelineHappyPath:
         saved = tmp_db.get_case(state["case_id"])
         assert saved is not None
         assert saved["status"] == state["status"]
+
+        # prompt_versions заполняются до synthesize и попадают в state + SQLite
+        assert state["prompt_versions"] == {"base": "v1.0", "whatif": "v1.0"}
+        assert json.loads(saved["prompt_versions_json"]) == {
+            "base": "v1.0",
+            "whatif": "v1.0",
+        }
 
 
 class TestPipelineClientNotFound:

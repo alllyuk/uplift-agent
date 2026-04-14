@@ -240,14 +240,46 @@ def sanity_checks(
     if d in delta:
         proposed_discount = delta[d]
 
-    if proposed_rate is not None and curr_discount is not None:
+    if proposed_discount is not None and curr_discount is not None:
         try:
             pd = int(proposed_discount)
             cd = int(curr_discount)
 
             if cd >= pd:
                 reasons.append(f"Уже предложены льготные условия.")
-                notes["discount_no_improvement"] = {"proposed": pr, "current": cr}
+                notes["discount_no_improvement"] = {"proposed": pd, "current": cd}
+        except Exception:
+            pass
+
+    # 4) Одновременное предложение нового продукта и изменение кредитного лимита
+    if (
+        new_offer_flag == 1
+        and str(delta.get("New_Product_Offer_Type", "")).strip() != ""
+        and "Credit_Limit_Change" in delta
+    ):
+        try:
+            limit_change = float(delta.get("Credit_Limit_Change"))
+            if limit_change != 0:
+                reasons.append(
+                    "Нельзя одновременно предлагать новый продукт и менять кредитный лимит — "
+                    "эффекты неразделимы, оценка аплифта ненадёжна."
+                )
+                notes["combo_product_and_limit"] = {
+                    "product": str(delta.get("New_Product_Offer_Type")),
+                    "limit_change": limit_change,
+                }
+        except Exception:
+            pass
+
+    # 5) Нулевая или отрицательная величина льготного тарифа
+    if "Tariff_Discount" in delta:
+        try:
+            td = int(delta.get("Tariff_Discount"))
+            if td <= 0:
+                reasons.append(
+                    f"Величина льготного тарифа ({td}) должна быть положительной — интервенция не имеет смысла."
+                )
+                notes["non_positive_discount"] = {"proposed": td}
         except Exception:
             pass
 
@@ -302,26 +334,34 @@ def parse_client_id_and_intent(query_text: str) -> Tuple[Optional[str], str]:
     """
     Извлекает ID клиента (формат CXXXXXX) из текста запроса с помощью регулярного выражения.
 
+    Принимается как латинская `C`, так и кириллическая `С` (визуально идентичны —
+    пользователи часто переключают раскладку и не замечают). В возвращаемом
+    client_id префикс нормализуется в латинскую `C`, чтобы дальнейший lookup
+    по датасету (где ID генерируются с латинской `C`) не промахивался.
+
     Args:
         query_text: Исходный текст запроса.
 
     Returns:
         Кортеж из двух элементов:
-        - Найденный client_id или None, если ID не найден.
+        - Найденный client_id (с латинским `C`) или None, если ID не найден.
         - Текст запроса (intent) без ID клиента, с удаленными лишними пробелами.
     """
-    # Паттерн для поиска "C" и 6 цифр как отдельного слова
-    pattern = r"\b(C\d{6})\b"
+    # Паттерн: латинская C или кириллическая С (в верхнем или нижнем регистре),
+    # затем 6 цифр, как отдельное слово. re.IGNORECASE покрывает `c`/`с`.
+    pattern = r"\b([CС]\d{6})\b"
 
-    match = re.search(pattern, query_text)
+    match = re.search(pattern, query_text, flags=re.IGNORECASE)
 
     if match:
-        client_id = match.group(1)
-        cleaned_text = re.sub(pattern, "", query_text, count=1).strip()
+        raw_id = match.group(1)
+        # Нормализуем префикс к латинской заглавной `C`.
+        client_id = "C" + raw_id[1:]
+        cleaned_text = re.sub(pattern, "", query_text, count=1, flags=re.IGNORECASE).strip()
         # Убираем двойные пробелы, которые могли остаться после удаления
         cleaned_text = re.sub(r"\s+", " ", cleaned_text)
         logger.info(
-            f"Regex found client_id: {client_id}. Cleaned query: '{cleaned_text}'"
+            f"Regex found client_id: {client_id} (raw='{raw_id}'). Cleaned query: '{cleaned_text}'"
         )
         return client_id, cleaned_text
     else:
