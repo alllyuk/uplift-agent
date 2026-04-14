@@ -1,0 +1,28 @@
+services:
+  uplift-agent:
+    build: .
+    image: uplift-agent:latest
+    container_name: uplift-agent
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    volumes:
+      # Paths match PathsConfig in sme_causal/core/config.py (root = /app).
+      # rag_data — bind-mount: document_corpus/ версионируется в git, удобно править локально.
+      # Остальные — named volumes: Docker инициализирует их от uid=1000 (как в образе),
+      # никаких проблем с правами на чистом клоне.
+      - ./rag_data:/app/rag_data
+      - artifacts:/app/artifacts
+      - causal_outputs:/app/causal_outputs
+      - reports:/app/reports
+      - hf_cache:/home/app/.cache/huggingface
+    restart: unless-stopped
+
+volumes:
+  artifacts:
+  causal_outputs:
+  reports:
+  hf_cache:

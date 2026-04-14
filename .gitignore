@@ -10,8 +10,14 @@ __pycache__/
 *.spec
 
 artifacts/
-rag_data/
 reports/
+
+# --- RAG: keep document_corpus/ (source texts), ignore derived artifacts ---
+rag_data/chunks.parquet
+rag_data/embeddings.parquet
+rag_data/index.faiss
+rag_data/raw_documents/
+rag_data/cleaned_documents/
 
 # --- Virtualenv ---
 venv/

@@ -1,9 +1,39 @@
+# Python bytecode / caches
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs / env
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# VCS / IDE
+.git/
+.github/
+.idea/
+.vscode/
+
+# Docs & project meta (not needed in image)
+docs/
+notebooks/
+*.md
+
+# Runtime / generated artifacts (must come via volumes)
 causal_outputs/
 reports/
-.git/
-.env
-.venv
+sme_causal/artifacts/
+sme_causal/rag_data/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Tests (not run inside the image)
+tests/
