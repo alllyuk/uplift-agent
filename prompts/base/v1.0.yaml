@@ -1,0 +1,23 @@
+version: "v1.0"
+created_at: "2026-04-14"
+parent_version: null
+notes: |
+  Первичная версия базового промпта (без What-if). Зафиксирована в рамках PoC.
+  Назначение: анализ профиля клиента по признакам (Industry, Region, финансовые метрики,
+  продуктовая линейка) с опциональным учётом причинно-следственного графа.
+  Выход: JSON c полями drivers_pos / drivers_neg / recommendations.
+
+source:
+  # Фактический текст шаблона лежит inline в CausalAgent.__init__ (атрибут _prompt_base).
+  # Это осознанный PoC-подход: registry отслеживает активную версию для CaseState.prompt_versions
+  # и SQLite audit, а полный перенос текста в YAML (runtime-загрузка) отложен до появления
+  # второй версии.
+  module: "sme_causal.agent.agent_service"
+  attribute: "CausalAgent._prompt_base"
+
+variables:
+  - base_schema_example
+  - base_json
+  - graph_dsl_block
+  - features_description
+  - target_metric_info

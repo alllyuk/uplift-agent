@@ -132,6 +132,15 @@ class LLMConfig(BaseSettings):
     )
     votes_threshold: int = Field(default=1, ge=1, description="Minimum votes threshold")
 
+    # Prompt versions — фактически использованные версии пишутся в CaseState.prompt_versions
+    # и в SQLite (cases.prompt_versions_json). Реестр версий — каталог prompts/{name}/{version}.yaml.
+    prompt_version_base: str = Field(
+        default="v1.0", description="Active version of the base-analysis prompt"
+    )
+    prompt_version_whatif: str = Field(
+        default="v1.0", description="Active version of the what-if prompt"
+    )
+
     model_config = SettingsConfigDict(
         env_prefix="LLM_", env_file=".env", extra="ignore"
     )
@@ -155,7 +164,7 @@ class LoggingConfig(BaseSettings):
 
     level: str = Field(default="INFO", description="Logging level")
     rotation: str = Field(default="10 MB", description="Log file rotation size")
-    retention: str = Field(default="1 week", description="Log retention period")
+    retention: str = Field(default="90 days", description="Log retention period")
     format: str = Field(
         default="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}",
         description="Log message format",

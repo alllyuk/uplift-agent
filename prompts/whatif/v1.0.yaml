@@ -1,0 +1,27 @@
+version: "v1.0"
+created_at: "2026-04-14"
+parent_version: null
+notes: |
+  Первичная версия What-if промпта. Используется в `CausalAgent.explain_what_if`
+  и активируется шагом `synthesize` Pipeline-оркестратора. Оценивает влияние
+  заданной интервенции (delta) с учётом PSM-результата, RAG-чанков и графа DSL.
+  При retry-проходе (после critic) в user-шаблон подставляется блок
+  {issues_context_block} с исправляемыми замечаниями.
+
+source:
+  module: "sme_causal.agent.agent_service"
+  attribute: "CausalAgent._prompt_whatif"
+
+variables:
+  - schema_example
+  - graph_dsl_block
+  - rag_context_block
+  - source_availability_block
+  - issues_context_block
+  - match_info_block
+  - base_json
+  - what_if_block
+  - psm_summary
+  - features_description
+  - task_instructions
+  - predict_number_block

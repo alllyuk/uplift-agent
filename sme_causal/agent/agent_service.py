@@ -21,6 +21,7 @@ from sme_causal.core.columns import (
 from sme_causal.core.llm import invoke_with_fallback
 from sme_causal.rag.rag_pipeline import RAG
 from sme_causal.core.utils import create_query, parse_json_obj_from_text
+from sme_causal.agent.prompt_registry import ensure_versions
 
 
 # Поля, которые формируют контекст клиента (совпадают с UI)
@@ -245,6 +246,13 @@ class CausalAgent:
         cfg = get_config()
         self.model_name = model or cfg.llm.model_name
         self.confidence_threshold = float(cfg.llm.confidence_threshold)
+        # Активные версии промптов — фактически использованные пишутся в CaseState.prompt_versions.
+        # Проверяем, что версии зарегистрированы в prompts/, чтобы поймать typo в config.
+        self._prompt_versions: Dict[str, str] = {
+            "base": str(cfg.llm.prompt_version_base),
+            "whatif": str(cfg.llm.prompt_version_whatif),
+        }
+        ensure_versions(self._prompt_versions)
         self.temperature = (
             float(temperature)
             if temperature is not None
@@ -407,6 +415,10 @@ class CausalAgent:
         )
 
     # -------------------- публичный API --------------------
+    def active_prompt_versions(self) -> Dict[str, str]:
+        """Вернуть фактически активные версии промптов (копия, чтобы не мутировали)."""
+        return dict(self._prompt_versions)
+
     def build_context_for_client(self, df: pd.DataFrame, client_id: str) -> Dict:
         """Build LLM context for a specific client ID.
 
