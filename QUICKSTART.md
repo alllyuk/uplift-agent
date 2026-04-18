@@ -32,17 +32,14 @@
 
 ## Деплой через Docker
 
-В репозитории есть готовые `Dockerfile` и `docker-compose.yml`. Всё ниже работает без локального venv — нужен только установленный Docker (+ `docker compose`).
+В репозитории есть готовые `Dockerfile` и `docker-compose.yml`. Всё ниже работает без локального venv — нужен только установленный Docker и Compose v2.
 
 ### End-to-end через Docker (локально)
 
 ```bash
-# 1. Секреты: создать .env рядом с docker-compose.yml.
-#    ВАЖНО: подставьте свой реальный ключ OpenAI вместо sk-REPLACE_ME.
-cat > .env <<'EOF'
-OPENAI_API_KEY=sk-REPLACE_ME
-LLM_MODEL=gpt-4o-mini
-EOF
+# 1. Секреты: скопировать шаблон и подставить реальный OPENAI_API_KEY.
+cp .env.example .env
+# открыть .env и заменить your-actual-api-key на свой ключ
 
 # 2. Собрать образ (первая сборка 5–10 мин: torch + faiss + sentence-transformers).
 docker compose build
@@ -70,7 +67,7 @@ docker compose logs -f
 docker compose down          # тома сохраняются; `down -v` удалит их вместе с данными
 ```
 
-На чистом клоне **ничего дополнительно создавать не нужно**: `rag_data/` уже в git (корпус + metadata), остальные тома (`artifacts`, `causal_outputs`, `reports`, `hf_cache`) — named volumes, Docker инициализирует их сам с правильными правами.
+**Права на `rag_data/`:** это bind-mount, контейнер пишет под uid=1000. Если клонировали под uid≠1000 (root на VPS, часть Mac-setups) — один раз требуется запустить `chown -R 1000:1000 ./rag_data`. Named volumes (`artifacts`, `causal_outputs`, `reports`, `hf_cache`) Docker поднимает с правами из образа.
 
 ### Что монтируется
 
@@ -96,6 +93,13 @@ docker cp uplift-agent:/app/artifacts ./artifacts_snapshot   # выгрузит�
 Минимум для production-деплоя на одиночный VPS:
 
 - **Ресурсы:** ≥ 2 ГБ RAM (sentence-transformers + torch + faiss). Лучше 4 ГБ.
+- **Docker Compose v2**
+- **`.env` на сервере**
+- **Права на `rag_data/` при клоне под root:** контейнер пишет в `/app/rag_data` под uid=1000, а bind-mount отдаёт каталог с правами хоста. После клона под root — один раз:
+  ```bash
+  chown -R 1000:1000 ./rag_data
+  ```
+  Иначе первый запуск может упасть с `PermissionError: /app/rag_data/chunks.parquet`.
 - **Bootstrap на сервере:** тот же `docker compose run --rm uplift-agent python -m sme_causal.app.main`. Без этого в `artifacts/` не будет графов, и кейсы с `--graph-method` упадут.
 - **Бэкапы SQLite:**
   ```bash
@@ -103,7 +107,12 @@ docker cp uplift-agent:/app/artifacts ./artifacts_snapshot   # выгрузит�
       tar czf /backup/artifacts-$(date +%F).tgz -C /data .
   ```
 - **Секреты:** `OPENAI_API_KEY` и прочее — через `.env` или secret-менеджер хостера, в образ не встраивать.
-- **TLS/прокси:** Streamlit отдаёт голый HTTP на 8501 — перед ним поставить nginx/traefik/Caddy с Let's Encrypt. Порт 8501 наружу не открывать.
+- **TLS/прокси:** Streamlit отдаёт голый HTTP на 8501, без built-in auth. Дефолтный `docker-compose.yml` биндит порт на `0.0.0.0` (удобно для локальной разработки) — на remote-хосте перед первым запуском поправьте в `docker-compose.yml`:
+  ```yaml
+  ports:
+    - "127.0.0.1:8501:8501"
+  ```
+  Затем перед ним — Caddy/nginx/traefik с TLS (Let's Encrypt или self-signed для демо) и basic auth, проксирующий на `127.0.0.1:8501`. Без этого Streamlit торчит в интернет без аутентификации.
 
 ---
 
@@ -124,10 +133,9 @@ pip install -r requirements.txt
 
 2. Создать `.env` в корне проекта (подхватывается автоматически через `python-dotenv`):
 
-```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your-actual-api-key
-LLM_MODEL=gpt-4o-mini
+```bash
+cp .env.example .env
+# открыть .env и подставить реальный OPENAI_API_KEY
 ```
 
 Дополнительные переменные (LLM/data/paths/logging) — см. defaults в `sme_causal/core/config.py`. `OPENAI_API_KEY` обязателен для любых LLM-вызовов.

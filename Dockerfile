@@ -28,13 +28,17 @@ COPY . .
 
 # Persistent data dirs — mount host volumes to these paths at runtime.
 # Paths match PathsConfig in sme_causal/core/config.py (parents[2] = /app).
-RUN mkdir -p \
+# /home/app/.cache/huggingface is pre-created so the named volume mounted there
+# inherits app:app ownership instead of coming up as root:root (Docker copies
+# owner/perms from the image path only when that path already exists).
+RUN useradd -m -u 1000 -s /bin/bash app \
+    && mkdir -p \
         /app/artifacts \
         /app/rag_data \
         /app/causal_outputs \
         /app/reports \
-    && useradd -m -u 1000 -s /bin/bash app \
-    && chown -R app:app /app
+        /home/app/.cache/huggingface \
+    && chown -R app:app /app /home/app
 
 USER app
 
