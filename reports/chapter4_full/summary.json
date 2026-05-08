@@ -1,0 +1,71 @@
+{
+  "n_total": 40,
+  "by_variant": {
+    "full": {
+      "n": 8,
+      "n_done": 6,
+      "n_degraded": 0,
+      "n_aborted": 2,
+      "pass_rate_critic": 0.75,
+      "median_latency_ms": 26175.5,
+      "p95_latency_ms": 28071.5,
+      "mean_judge_score": 2.875
+    },
+    "no_psm": {
+      "n": 8,
+      "n_done": 6,
+      "n_degraded": 0,
+      "n_aborted": 2,
+      "pass_rate_critic": 0.75,
+      "median_latency_ms": 26349.0,
+      "p95_latency_ms": 38063.15,
+      "mean_judge_score": 2.5
+    },
+    "no_rag": {
+      "n": 8,
+      "n_done": 6,
+      "n_degraded": 0,
+      "n_aborted": 2,
+      "pass_rate_critic": 0.75,
+      "median_latency_ms": 20945.0,
+      "p95_latency_ms": 23076.0,
+      "mean_judge_score": 2.5
+    },
+    "no_graph": {
+      "n": 8,
+      "n_done": 6,
+      "n_degraded": 0,
+      "n_aborted": 2,
+      "pass_rate_critic": 0.75,
+      "median_latency_ms": 24664.0,
+      "p95_latency_ms": 43050.549999999996,
+      "mean_judge_score": 3.1666666666666665
+    },
+    "llm_only": {
+      "n": 8,
+      "n_done": 6,
+      "n_degraded": 0,
+      "n_aborted": 2,
+      "pass_rate_critic": 0.75,
+      "median_latency_ms": 16232.0,
+      "p95_latency_ms": 26162.899999999994,
+      "mean_judge_score": 2.375
+    }
+  },
+  "latency": {
+    "median_ms": 26175.5,
+    "p95_ms": 28071.5,
+    "max_ms": 28173.0,
+    "mean_ms": 19987.125
+  },
+  "rag_refine": {
+    "share_with_refine": 0.75,
+    "mean_iterations": 1.5
+  },
+  "critic": {
+    "primary_pass_rate": 0.75,
+    "any_rule_issue": 0.0,
+    "any_llm_issue": 0.0,
+    "review_required": 0.0
+  }
+}

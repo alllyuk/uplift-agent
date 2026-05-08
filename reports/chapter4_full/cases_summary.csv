@@ -1,0 +1,41 @@
+client_id,delta,variant,status,abort_reason,latency_ms,rag_iterations,retry_count,rule_issues_n,llm_issues_n,passed_critic,n_rag_chunks,psm_ok,review_required
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",full,done,,26745,2,1,0,0,True,5,True,False
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_psm,done,,25546,2,1,0,0,True,5,False,False
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_rag,done,,22785,1,1,0,0,True,3,True,False
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_graph,done,,24628,2,1,0,0,True,4,True,False
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",llm_only,done,,18985,1,1,0,0,True,3,False,False
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",full,done,,27883,2,1,0,0,True,6,True,False
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_psm,done,,27152,2,1,0,0,True,5,False,False
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_rag,done,,23083,1,1,0,0,True,3,True,False
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_graph,done,,32772,2,1,0,0,True,6,True,False
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",llm_only,done,,16725,1,1,0,0,True,3,False,False
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",full,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",no_psm,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",no_rag,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",no_graph,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",llm_only,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C001100,"{""Credit_Limit_Change"": 15.0}",full,done,,27120,2,1,0,0,True,6,True,False
+C001100,"{""Credit_Limit_Change"": 15.0}",no_psm,done,,35729,2,1,0,0,True,6,False,False
+C001100,"{""Credit_Limit_Change"": 15.0}",no_rag,done,,19470,1,1,0,0,True,3,True,False
+C001100,"{""Credit_Limit_Change"": 15.0}",no_graph,done,,24510,2,1,0,0,True,6,True,False
+C001100,"{""Credit_Limit_Change"": 15.0}",llm_only,done,,15739,1,1,0,0,True,3,False,False
+C001500,"{""Credit_Limit_Change"": 25.0}",full,done,,24355,2,1,0,0,True,6,True,False
+C001500,"{""Credit_Limit_Change"": 25.0}",no_psm,done,,39320,1,1,0,0,True,3,False,False
+C001500,"{""Credit_Limit_Change"": 25.0}",no_rag,done,,21623,1,1,0,0,True,3,True,False
+C001500,"{""Credit_Limit_Change"": 25.0}",no_graph,done,,46553,2,1,0,0,True,6,True,False
+C001500,"{""Credit_Limit_Change"": 25.0}",llm_only,done,,20218,1,1,0,0,True,3,False,False
+C001900,"{""Tariff_Discount"": 1}",full,done,,25606,2,1,0,0,True,6,True,False
+C001900,"{""Tariff_Discount"": 1}",no_psm,done,,24628,2,1,0,0,True,6,False,False
+C001900,"{""Tariff_Discount"": 1}",no_rag,done,,20267,1,1,0,0,True,3,True,False
+C001900,"{""Tariff_Discount"": 1}",no_graph,done,,36546,2,1,0,0,True,6,True,False
+C001900,"{""Tariff_Discount"": 1}",llm_only,done,,29364,1,1,0,0,True,3,False,False
+C002300,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",full,aborted,policy_blocked,14,0,0,0,0,False,0,False,False
+C002300,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_psm,aborted,policy_blocked,2,0,0,0,0,False,0,False,False
+C002300,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_rag,aborted,policy_blocked,2,0,0,0,0,False,0,False,False
+C002300,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",no_graph,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C002300,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",llm_only,aborted,policy_blocked,1,0,0,0,0,False,0,False,False
+C002700,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",full,done,,28173,2,1,0,0,True,6,True,False
+C002700,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_psm,done,,31196,2,1,0,0,True,6,False,False
+C002700,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_rag,done,,23063,1,1,0,0,True,3,True,False
+C002700,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",no_graph,done,,24700,2,1,0,0,True,5,True,False
+C002700,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",llm_only,done,,15412,1,1,0,0,True,3,False,False

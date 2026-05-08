@@ -1,0 +1,6 @@
+client_id,delta,skipped,n_bullets_v1,n_bullets_v2,matched_bullets,match_rate,cosine_sim,skip_reason
+C000100,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""acquiring""}",False,13.0,13.0,13.0,1.0,0.977851152420044,
+C000350,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""payroll""}",False,11.0,15.0,11.0,1.0,0.9659342765808105,
+C000720,"{""New_Product_Offer"": 1, ""New_Product_Offer_Type"": ""deposit""}",True,,,,,,policy_blocked
+C001100,"{""Credit_Limit_Change"": 15.0}",False,15.0,15.0,15.0,1.0,0.9697966575622559,
+C001500,"{""Credit_Limit_Change"": 25.0}",False,14.0,15.0,14.0,1.0,0.9678760170936584,

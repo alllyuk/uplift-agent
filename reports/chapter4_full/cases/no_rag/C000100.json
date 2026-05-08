@@ -1,0 +1,112 @@
+{
+  "case_id": "6492c81456224920ba8d4e5c38e128ea",
+  "client_id": "C000100",
+  "raw_query": null,
+  "client_context": {
+    "Industry": "Construction",
+    "Region": "RU-TA",
+    "Business_Size": "small",
+    "Years_in_Operation": 7,
+    "Client_Tenure": 2,
+    "Num_Products": 4,
+    "Has_Deposit": 1,
+    "Has_Card": 1,
+    "Has_Acquiring": 0,
+    "Has_Payroll": 0,
+    "Has_Loan": 1,
+    "Total_Bank_Profit": 178393.46,
+    "Avg_Monthly_Inflow": 802285.83,
+    "Avg_Monthly_Outflow": 652321.36,
+    "Monthly_Transaction_Count": 226,
+    "Avg_Account_Balance": 119967.1,
+    "Net_Cashflow": 149964.47,
+    "Activity_Bucket": "high",
+    "Balance_Bucket": "low",
+    "New_Product_Offer": 0,
+    "New_Product_Offer_Type": "none",
+    "Credit_Limit_Change": 0.0,
+    "Tariff_Discount": 0,
+    "Revenue_Growth_Rate": 0.0435,
+    "Revenue_Trend": "up"
+  },
+  "intervention_delta": {
+    "New_Product_Offer": 1,
+    "New_Product_Offer_Type": "acquiring"
+  },
+  "policy_result": {
+    "blocked": false,
+    "reasons": [],
+    "notes": {}
+  },
+  "psm_result": {
+    "ok": true,
+    "treatment_col": "New_Product_Offer",
+    "outcome_col": "Revenue_Growth_Rate",
+    "covariates": [
+      "Industry",
+      "Region",
+      "Business_Size",
+      "Avg_Account_Balance",
+      "Avg_Monthly_Inflow",
+      "Avg_Monthly_Outflow",
+      "Num_Products"
+    ],
+    "threshold": null,
+    "caliper": 0.05,
+    "match_ratio": 1,
+    "replacement": false,
+    "att": 0.02186276315789474,
+    "ate": 0.020679699248120305,
+    "n_pairs": 760,
+    "n_treated": 760,
+    "n_control": 760,
+    "psm_reliable": true,
+    "psm_reason": "Matched sample is large enough: n_treated=760, n_control=760."
+  },
+  "rag_chunks": [
+    "[TITLE] Вербальные интервенции Банка России и структура процентных ставок | [DOC_ID] doc_03\n\nтервенций, которые встречались не менее значение g-кривой при T = 1. В уравнении дисраз в рассматриваемом сегменте наблюдений. персии arch- и garch-компоненты значимы, их\nТаким образом, не все тональности включа- сумма достаточно близка к единице (≥ 0,95).\nются в модели, и для одного и того же сегмента, Кроме того, верной оказалась и гипотеза о том,\nно различных сроков погашения T, также воз- что даже значимые вербальные интервенции\nможны различные наборы регрессоров (так как имеют намного меньшее влияние на доходдлины сегментов для различных T не всегда ность значений g-кривой: значения соответсовпадают). И даже не для всех временных ствующих коэффициентов различаются почти\nсегментов мы можем протестировать влияние на порядка. Исходя из этого, мы можем утвервербальных интервенций вообще (если и пози- ждать, что верно специфицированные в претивных, и нейтральных, и негативных сигна- дыдущем разделе модели все еще адекватно\nлов окажется меньше 5). По этой причине воз- представляют данные, несмотря на добавление\nникает еще одно ограничение нашего анализа, 1–3 новых регрессоров для различных тональпоскольку, как правило, невозможно сравнить ностей вербальных интервенций.\nТак как мы оцениваем моделей для раз1 Более подробно результаты проведенного анализа и итоличных сегментов и сроков погашения, и для\nговые спецификации моделей см. в электронном приложекаждой из них мы оцениваем различных",
+    "[TITLE] Финансовые рынки в период структурных сдвигов | [DOC_ID] doc_18\n\nDocument/File/142481/Consultation  .pdf Руководство по аутсорсингу от .2019 Е//2019/ «Guidelines on  arrangements» // https://www.eba.europa.eu/regulationand-policy/internal-governance/guidelines-on-outsourcing-arrangements   on Third-Party Relationships:   https://www.fdic.gov/news/financial-institution-letters/2023/fil23029.html   | 2/        2021 https://www.bankofengland.co.uk/-/media/boe/files/prudentialregulation/supervisory-statement/2021/ss221-march-.pdf     2017 https://www.apra.gov.au/sites/default/files/Prudential-Standard---Outsourcing%28July-2017%.pdf  of  Activities,    https://www.osfi-bsif.gc.ca/Eng/fi-if/rg-ro/gdn-ort/gl-ld/Pages/b10.aspx#toc7.   on  of    https://taxguru.in/rbi/master-direction-outsourcing-information-technology-services.\non Outsourcing.   of Singapore.  2016. https://www.mas.gov.sg/-/media/mas/regulations-and-financial-stability/\nregulatory-and-supervisory-framework/risk-management/outsourcing-guidelines jul-2016-revised-on--oct-2018.pdf;\ninstitutions, 2021 https://www.bot.go.tz/Publications/Acts,%20Regulations,%20Circulars,%20Guidelines/Guidelines/en/.pdf плу лун фл ов лдбьвЮ п бдлдн лтьлд вТТбкТтл твь б д фвьбьтлдло тж Тл ж клиентоориентированный подход и высокое так и организациями, аффилированными\nкачество предоставляемых услуг, что обеспе- с ним (внутригрупповой аутсорсинг уречивается возможностью замены компаний, гулирован, например, в Великобритании,\nработающих на аутсорсинге, привлечение Австралии, Пакистане). К выполнению",
+    "[TITLE] Инновации в России отчёт | [DOC_ID] doc_39\n\nБиблиография\nPromoting trade and business between Japan and the\nrest of the world. — Japan External Trade Organization. —\nhttps://www.jetro.go.jp/en/jetro/activities/business.html.\nRajat Dhawan, Bernd Heid, Paul Küderli, and Kevin Laczkowski. How\nindustrial companies can respond to disruptive forces. — McKinsey &\nCompany, апрель 2018 г. — https://www.mckinsey.com/industries/\nautomotive-and-assembly/our-insights/how-industrial-companies-canrespond-to-disruptive-forces?cid=cl4c.\nSomesh Khanna and Heitor Martins. Six digital growth strategies\nfor banks. — McKinsey & Company, апрель 2018 г. —\nhttps://www.mckinsey.com/business-functions/digital-mckinsey/ourinsights/six-digital-growth-strategies-for-banks?cid=cl4c.\nSoon, You Could Have Your Genome Sequenced in 60 Minutes for\n$100. — Futurism, 19 января 2017 г. — https://futurism.com/soon-youcould-have-your-genome-sequenced-in-60-minutes-for-100/.\nState of Innovation. — CB Insights University, 2018 г. —\nhttps://www.cbinsights.com/research-state-of-innovation-report.\nTracy Staton. The top 20 drugs in 2020—worldwide sales. —\nFiercePharma, 2018 г. — https://www.fiercepharma.com/special-report/\ntop-20-drugs-2020-worldwide-sales.\nWorld Population Ageing 2017. — United Nations, Department\nof Economic and Social Affairs, Population Division\n(2017). — https://esa.un.org/unpd/wpp/DataQuery/.\nАналитические и статистические данные\nАнализ McKinsey & Company на основе данных S&P Capital IQ. —\nЗакрытая база данных. — https://www.capitaliq.com."
+  ],
+  "rag_iterations": 1,
+  "rag_query_history": [
+    "Ищу причинные связи и ожидаемый знак эффекта для intervention New_Product_Offer = acquiring на Revenue_Growth_Rate: есть ли в графе или документации путь от Tariff_Discount/других драйверов к New_Product_Offer(acquiring), какие сегменты клиентов с Has_Acquiring=0 и какими признаками профиля получают максимальный прирост выручки после предложения acquiring, и какие ограничения есть у PSM/сбалансированной выборки при интерпретации ATT."
+  ],
+  "graph_dsl": "# Causal Graph (DSL) v1\nIndustry -> Business_Size | sign:non-monotonic | conf:0.62 | note:\"Отрасль во многом определяет типичный масштаб бизнеса: в капиталоемких и сервисных отраслях чаще встречаются компании большего размера. | Отраслевая специфика влияет на типичный масштаб бизнеса: в капиталоемких отраслях чаще встречаются более крупные компании, но связь неоднородна.\"\nIndustry -> Years_in_Operation | sign:non-monotonic | conf:0.47 | note:\"Для ряда отраслей характерны более длинные жизненные циклы и более высокая вероятность сохранения бизнеса на рынке. | В разных отраслях скорость появления, выживания и зрелости компаний различается, что может отражаться на возрасте бизнеса в портфеле.\"\nRegion -> Business_Size | sign:non-monotonic | conf:0.54 | note:\"Регион влияет на доступ к рынкам, кадрам и инфраструктуре, что отражается на типичном размере компаний. | Регион влияет на доступ к рынкам, инфраструктуре и масштабу бизнеса, что сказывается на размере компании.\"\nBusiness_Size -> Avg_Monthly_Inflow | sign:+ | conf:0.83 | note:\"Более крупные компании обычно генерируют больший денежный оборот и приток средств. | Более крупные компании обычно генерируют больший денежный поток и обороты по счетам.\"\nBusiness_Size -> Monthly_Transaction_Count | sign:+ | conf:0.79 | note:\"У компаний большего размера обычно больше операционных платежей и транзакций.\"\nYears_in_Operation -> Client_Tenure | sign:+ | conf:0.72 | note:\"Чем дольше бизнес существует, тем выше вероятность более длительных отношений с банком. | Более старый бизнес с большей вероятностью дольше обслуживается в банке и накапливает клиентский стаж.\"\nYears_in_Operation -> Num_Products | sign:+ | conf:0.64 | note:\"С возрастом бизнеса и накоплением потребностей компания чаще подключает дополнительные банковские продукты. | Зрелые компании чаще со временем подключают дополнительные банковские продукты.\"\nClient_Tenure -> Num_Products | sign:+ | conf:0.86 | note:\"Чем дольше клиент работает с банком, тем больше возможностей для кросс-продаж и использования большего числа продуктов. | Чем дольше клиент в банке, тем больше возможностей для кросс-продаж и подключения новых продуктов.\"\nClient_Tenure -> Has_Deposit | sign:+ | conf:0.72 | note:\"Длительные отношения с банком повышают вероятность размещения депозитных продуктов.\"\nClient_Tenure -> Has_Loan | sign:+ | conf:0.68 | note:\"По мере углубления отношений с банком клиент чаще получает и использует кредитные продукты.\"\nNum_Products -> Total_Bank_Profit | sign:+ | conf:0.88 | note:\"Большее число продуктов обычно увеличивает комиссионный и процентный доход банка от клиента. | Большее число продуктов обычно увеличивает комиссионный и процентный доход банка.\"\nHas_Deposit -> Total_Bank_Profit | sign:+ | conf:0.81 | note:\"Депозитный продукт приносит банку маржу и повышает прибыль от клиента.\"\nHas_Card -> Total_Bank_Profit | sign:+ | conf:0.77 | note:\"Расчетная карта увеличивает транзакционную активность и доходы банка по обслуживанию.\"\nHas_Acquiring -> Total_Bank_Profit | sign:+ | conf:0.84 | note:\"Эквайринг обычно является комиссионно-доходным продуктом и повышает прибыль банка.\"\nHas_Payroll -> Total_Bank_Profit | sign:+ | conf:0.78 | note:\"Зарплатный проект увеличивает обороты и удержание клиента, что повышает доходность.\"\nHas_Loan -> Total_Bank_Profit | sign:+ | conf:0.90 | note:\"Кредитный продукт напрямую формирует процентный доход и комиссионную прибыль банка. | Кредитный продукт напрямую формирует процентный доход и повышает прибыль банка от клиента.\"\nRevenue_Growth_Rate -> Revenue_Trend | sign:+ | conf:0.95 | note:\"Рост выручки напрямую определяет категорию тренда как upward, flat или downward. | Увеличение темпа роста выручки сдвигает категорию тренда в сторону роста.\"\nAvg_Monthly_Inflow -> Net_Cashflow | sign:+ | conf:0.96 | note:\"Чем выше приток средств, тем выше чистый денежный поток при прочих равных. | Рост притока средств при прочих равных увеличивает чистый денежный поток.\"\nAvg_Monthly_Outflow -> Net_Cashflow | sign:- | conf:0.96 | note:\"Рост оттока средств уменьшает чистый денежный поток. | Рост оттока средств уменьшает чистый денежный поток.\"\nMonthly_Transaction_Count -> Activity_Bucket | sign:+ | conf:0.98 | note:\"Категория активности напрямую формируется по числу транзакций в месяц. | Категория активности напрямую определяется числом транзакций в месяц.\"\nAvg_Account_Balance -> Balance_Bucket | sign:+ | conf:0.98 | note:\"Категория остатка напрямую определяется уровнем среднего баланса. | Категория остатка напрямую зависит от среднего баланса на счете.\"\nAvg_Monthly_Inflow -> Avg_Account_Balance | sign:+ | conf:0.71 | note:\"Более высокий приток средств обычно повышает средний остаток на счёте.\"\nAvg_Monthly_Outflow -> Avg_Account_Balance | sign:- | conf:0.67 | note:\"Более высокий отток средств обычно снижает средний остаток на счёте.\"\nBusiness_Size -> Avg_Monthly_Outflow | sign:+ | conf:0.82 | note:\"У компаний большего размера, как правило, выше расходы, закупки и платежный оборот.\"\nHas_Deposit -> Avg_Account_Balance | sign:+ | conf:0.81 | note:\"Наличие депозитного счета обычно связано с размещением и удержанием средств на счетах клиента.\"\nHas_Card -> Monthly_Transaction_Count | sign:+ | conf:0.74 | note:\"Расчетная карта увеличивает число повседневных платежных операций.\"\nHas_Acquiring -> Monthly_Transaction_Count | sign:+ | conf:0.77 | note:\"Эквайринг связан с ростом платежного потока и количества транзакций у клиента.\"\nHas_Payroll -> Avg_Monthly_Inflow | sign:+ | conf:0.79 | note:\"Зарплатный проект обычно увеличивает регулярные поступления на счета компании.\"\nAvg_Monthly_Inflow -> Revenue_Growth_Rate | sign:+ | conf:0.76 | note:\"Устойчивый рост поступлений обычно отражает рост выручки компании.\"\nTariff_Discount -> New_Product_Offer | sign:+ | conf:0.64 | note:\"Льготные условия повышают вероятность отклика на предложение нового продукта.\"",
+  "explanation": {
+    "diagnosis": "",
+    "drivers_pos": [
+      "PSM: ATT=0.0219; matched 760/760; ожидается рост выручки.",
+      "По графу: Has_Acquiring -> Monthly_Transaction_Count положительно влияет на активность; доверие высокое.",
+      "По графу: Has_Acquiring -> Total_Bank_Profit положительно влияет на доход банка; доверие высокое."
+    ],
+    "drivers_neg": [
+      "Профиль: Business_Size=small; масштаб внедрения может быть ограничен.",
+      "По графу: Business_Size -> Avg_Monthly_Outflow положительно влияет на расходы; доверие высокое.",
+      "На основании документа doc_03: коэффициенты малые («влияние на доходность... меньше») — эффект может быть умеренным."
+    ],
+    "recommendations": [],
+    "expected_effect": "Приоритет: PSM → ожидаем рост Revenue_Growth_Rate примерно на 2.2 п.п.; цифры из PSM (ATT=0.0219, ATE=0.0207, n_treated=760, n_control=760), RAG вторично: подтверждает, что эффекты интервенций обычно скромные; граф дополняет: Has_Acquiring усиливает транзакционную активность и доходность.",
+    "raw_text": "{\n  \"drivers_pos\": [\n    \"PSM: ATT=0.0219; matched 760/760; ожидается рост выручки.\",\n    \"По графу: Has_Acquiring -> Monthly_Transaction_Count положительно влияет на активность; доверие высокое.\",\n    \"По графу: Has_Acquiring -> Total_Bank_Profit положительно влияет на доход банка; доверие высокое.\"\n  ],\n  \"drivers_neg\": [\n    \"Профиль: Business_Size=small; масштаб внедрения может быть ограничен.\",\n    \"По графу: Business_Size -> Avg_Monthly_Outflow положительно влияет на расходы; доверие высокое.\",\n    \"На основании документа doc_03: коэффициенты малые («влияние на доходность... меньше») — эффект может быть умеренным.\"\n  ],\n  \"expected_effect\": \"Приоритет: PSM → ожидаем рост Revenue_Growth_Rate примерно на 2.2 п.п.; цифры из PSM (ATT=0.0219, ATE=0.0207, n_treated=760, n_control=760), RAG вторично: подтверждает, что эффекты интервенций обычно скромные; граф дополняет: Has_Acquiring усиливает транзакционную активность и доходность.\"\n}"
+  },
+  "critic_result": {
+    "passed": true,
+    "rule_issues": [],
+    "llm_issues": [],
+    "issues": []
+  },
+  "retry_count": 1,
+  "requires_human_review": false,
+  "review_reason": null,
+  "status": "done",
+  "trace_id": null,
+  "latency_ms": 22785,
+  "abort_reason": null,
+  "started_at": 1778265512.239275,
+  "prompt_versions": {
+    "base": "v1.0",
+    "whatif": "v1.0"
+  },
+  "experiment_id": null,
+  "variant": null
+}

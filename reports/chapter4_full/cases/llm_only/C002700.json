@@ -1,0 +1,86 @@
+{
+  "case_id": "cb20ff30c9904787bd5cd7a60877fc91",
+  "client_id": "C002700",
+  "raw_query": null,
+  "client_context": {
+    "Industry": "Healthcare",
+    "Region": "RU-SPE",
+    "Business_Size": "micro",
+    "Years_in_Operation": 7,
+    "Client_Tenure": 4,
+    "Num_Products": 3,
+    "Has_Deposit": 1,
+    "Has_Card": 1,
+    "Has_Acquiring": 0,
+    "Has_Payroll": 0,
+    "Has_Loan": 0,
+    "Total_Bank_Profit": 67506.52,
+    "Avg_Monthly_Inflow": 343803.34,
+    "Avg_Monthly_Outflow": 180227.59,
+    "Monthly_Transaction_Count": 178,
+    "Avg_Account_Balance": 178586.76,
+    "Net_Cashflow": 163575.75,
+    "Activity_Bucket": "high",
+    "Balance_Bucket": "medium",
+    "New_Product_Offer": 0,
+    "New_Product_Offer_Type": "none",
+    "Credit_Limit_Change": 0.0,
+    "Tariff_Discount": 1,
+    "Revenue_Growth_Rate": 0.0232,
+    "Revenue_Trend": "up"
+  },
+  "intervention_delta": {
+    "New_Product_Offer": 1,
+    "New_Product_Offer_Type": "payroll"
+  },
+  "policy_result": {
+    "blocked": false,
+    "reasons": [],
+    "notes": {}
+  },
+  "psm_result": null,
+  "rag_chunks": [
+    "[TITLE] Факторы формирования лояльности клиентов в банковском секторе России | [DOC_ID] doc_05\n\nА. В. Славова, Н. П. Козлова1\nФАКТОРЫ ФОРМИРОВАНИЯ ЛОЯЛЬНОСТИ КЛИЕНТОВ В\nБАНКОВСКОМ СЕКТОРЕ РОССИИ\nА. Slavova, N. Kozlova. Factors influencing customer loyalty in the\nbanking sector of Russia\nАннотация. В статье рассматриваются факторы Abstract. This article explores the factors shaping\nформирования лояльности клиентов в банковском customer loyalty in the banking sector of Russia,\nсекторе России, предоставляя обзор различных providing an overview of various approaches to defining\nподходов к определению понятия лояльности на the concept of loyalty in the market of banking services.\nрынке банковских услуг. Исследование охватывает The research encompasses the current state of customer\nсовременное состояние уровня лояльности loyalty levels in Russian banks and analyzes its\nбанковских клиентов в России и анализирует его dynamics, including annual variations. The article also\nдинамику, ежегодные изменения. В структуре статьи meticulously examines the factors influencing the\nтакже подробно рассматриваются факторы, formation of customer loyalty in banks and identifies\nвлияющие на формирование лояльности клиентов barriers hindering this process. Special attention is given\nбанков, а также выявляются барьеры, to the advantages offered by the implementation of\nпрепятствующие этому процессу. Особое внимание loyalty programs for businesses in the banking sector.\nуделяется преимуществам, которые предоставляет Analysis of these aspects ensures a comprehensive",
+    "[TITLE] Финансовые рынки в период структурных сдвигов | [DOC_ID] doc_18\n\nDocument/File/142481/Consultation  .pdf Руководство по аутсорсингу от .2019 Е//2019/ «Guidelines on  arrangements» // https://www.eba.europa.eu/regulationand-policy/internal-governance/guidelines-on-outsourcing-arrangements   on Third-Party Relationships:   https://www.fdic.gov/news/financial-institution-letters/2023/fil23029.html   | 2/        2021 https://www.bankofengland.co.uk/-/media/boe/files/prudentialregulation/supervisory-statement/2021/ss221-march-.pdf     2017 https://www.apra.gov.au/sites/default/files/Prudential-Standard---Outsourcing%28July-2017%.pdf  of  Activities,    https://www.osfi-bsif.gc.ca/Eng/fi-if/rg-ro/gdn-ort/gl-ld/Pages/b10.aspx#toc7.   on  of    https://taxguru.in/rbi/master-direction-outsourcing-information-technology-services.\non Outsourcing.   of Singapore.  2016. https://www.mas.gov.sg/-/media/mas/regulations-and-financial-stability/\nregulatory-and-supervisory-framework/risk-management/outsourcing-guidelines jul-2016-revised-on--oct-2018.pdf;\ninstitutions, 2021 https://www.bot.go.tz/Publications/Acts,%20Regulations,%20Circulars,%20Guidelines/Guidelines/en/.pdf плу лун фл ов лдбьвЮ п бдлдн лтьлд вТТбкТтл твь б д фвьбьтлдло тж Тл ж клиентоориентированный подход и высокое так и организациями, аффилированными\nкачество предоставляемых услуг, что обеспе- с ним (внутригрупповой аутсорсинг уречивается возможностью замены компаний, гулирован, например, в Великобритании,\nработающих на аутсорсинге, привлечение Австралии, Пакистане). К выполнению",
+    "[TITLE] Инновации в России отчёт | [DOC_ID] doc_39\n\nБиблиография\nPromoting trade and business between Japan and the\nrest of the world. — Japan External Trade Organization. —\nhttps://www.jetro.go.jp/en/jetro/activities/business.html.\nRajat Dhawan, Bernd Heid, Paul Küderli, and Kevin Laczkowski. How\nindustrial companies can respond to disruptive forces. — McKinsey &\nCompany, апрель 2018 г. — https://www.mckinsey.com/industries/\nautomotive-and-assembly/our-insights/how-industrial-companies-canrespond-to-disruptive-forces?cid=cl4c.\nSomesh Khanna and Heitor Martins. Six digital growth strategies\nfor banks. — McKinsey & Company, апрель 2018 г. —\nhttps://www.mckinsey.com/business-functions/digital-mckinsey/ourinsights/six-digital-growth-strategies-for-banks?cid=cl4c.\nSoon, You Could Have Your Genome Sequenced in 60 Minutes for\n$100. — Futurism, 19 января 2017 г. — https://futurism.com/soon-youcould-have-your-genome-sequenced-in-60-minutes-for-100/.\nState of Innovation. — CB Insights University, 2018 г. —\nhttps://www.cbinsights.com/research-state-of-innovation-report.\nTracy Staton. The top 20 drugs in 2020—worldwide sales. —\nFiercePharma, 2018 г. — https://www.fiercepharma.com/special-report/\ntop-20-drugs-2020-worldwide-sales.\nWorld Population Ageing 2017. — United Nations, Department\nof Economic and Social Affairs, Population Division\n(2017). — https://esa.un.org/unpd/wpp/DataQuery/.\nАналитические и статистические данные\nАнализ McKinsey & Company на основе данных S&P Capital IQ. —\nЗакрытая база данных. — https://www.capitaliq.com."
+  ],
+  "rag_iterations": 1,
+  "rag_query_history": [
+    "Найди, пожалуйста, данные по клиентам с предложением нового продукта типа payroll: текущие продукты и счета, стаж/тенюр, активность и транзакционную историю, а также признаки отклика на payroll-оффер и фактические результаты после его предложения. Нужны материалы, которые позволяют обоснованно сформулировать рекомендации именно для intervention delta New_Product_Offer = payroll, без предположений о профиле клиента."
+  ],
+  "graph_dsl": "",
+  "explanation": {
+    "diagnosis": "",
+    "drivers_pos": [
+      "Текущий профиль: high Activity_Bucket и положительный Net_Cashflow.",
+      "На основании документа doc_05: лояльность растёт от программ; «преимущества... loyalty programs» → поддержка удержания."
+    ],
+    "drivers_neg": [
+      "Текущий профиль: Has_Payroll=0; зарплатный проект нужно подключать.",
+      "На основании документа doc_05: есть барьеры лояльности; «barriers hindering this process» → внедрение не гарантировано."
+    ],
+    "recommendations": [],
+    "expected_effect": "Приоритет: RAG → ожидаем нейтральный/слабый эффект на удержание и вовлечённость; чисел нет, опираемся на doc_05 («барьеры», «loyalty programs»), PSM и GRAPH отсутствуют. Для реализации: предложить payroll, но ожидать результат только при снятии барьеров и подтверждении спроса.",
+    "raw_text": "{\"drivers_pos\":[\"Текущий профиль: high Activity_Bucket и положительный Net_Cashflow.\",\"На основании документа doc_05: лояльность растёт от программ; «преимущества... loyalty programs» → поддержка удержания.\"],\"drivers_neg\":[\"Текущий профиль: Has_Payroll=0; зарплатный проект нужно подключать.\",\"На основании документа doc_05: есть барьеры лояльности; «barriers hindering this process» → внедрение не гарантировано.\"],\"expected_effect\":\"Приоритет: RAG → ожидаем нейтральный/слабый эффект на удержание и вовлечённость; чисел нет, опираемся на doc_05 («барьеры», «loyalty programs»), PSM и GRAPH отсутствуют. Для реализации: предложить payroll, но ожидать результат только при снятии барьеров и подтверждении спроса.\"}"
+  },
+  "critic_result": {
+    "passed": true,
+    "rule_issues": [],
+    "llm_issues": [],
+    "issues": []
+  },
+  "retry_count": 1,
+  "requires_human_review": false,
+  "review_reason": null,
+  "status": "done",
+  "trace_id": null,
+  "latency_ms": 15412,
+  "abort_reason": null,
+  "started_at": 1778266224.8580961,
+  "prompt_versions": {
+    "base": "v1.0",
+    "whatif": "v1.0"
+  },
+  "experiment_id": null,
+  "variant": null
+}

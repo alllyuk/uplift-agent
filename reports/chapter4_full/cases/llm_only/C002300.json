@@ -1,0 +1,63 @@
+{
+  "case_id": "93cdd0ef29c74df0bf6e236f4163fc6e",
+  "client_id": "C002300",
+  "raw_query": null,
+  "client_context": {
+    "Industry": "Hospitality",
+    "Region": "RU-KDA",
+    "Business_Size": "small",
+    "Years_in_Operation": 6,
+    "Client_Tenure": 2,
+    "Num_Products": 5,
+    "Has_Deposit": 1,
+    "Has_Card": 1,
+    "Has_Acquiring": 1,
+    "Has_Payroll": 1,
+    "Has_Loan": 0,
+    "Total_Bank_Profit": 110716.55,
+    "Avg_Monthly_Inflow": 875882.86,
+    "Avg_Monthly_Outflow": 584896.63,
+    "Monthly_Transaction_Count": 167,
+    "Avg_Account_Balance": 509267.63,
+    "Net_Cashflow": 290986.23,
+    "Activity_Bucket": "high",
+    "Balance_Bucket": "high",
+    "New_Product_Offer": 0,
+    "New_Product_Offer_Type": "none",
+    "Credit_Limit_Change": 0.0,
+    "Tariff_Discount": 0,
+    "Revenue_Growth_Rate": 0.0134,
+    "Revenue_Trend": "flat"
+  },
+  "intervention_delta": {
+    "New_Product_Offer": 1,
+    "New_Product_Offer_Type": "acquiring"
+  },
+  "policy_result": {
+    "blocked": true,
+    "reasons": [
+      "У клиента уже есть этот продукт (acquiring) — повторное предложение не создаёт ценности."
+    ],
+    "notes": {
+      "has_acquiring": true
+    }
+  },
+  "psm_result": null,
+  "rag_chunks": [],
+  "rag_iterations": 0,
+  "rag_query_history": [],
+  "graph_dsl": "",
+  "explanation": {},
+  "critic_result": {},
+  "retry_count": 0,
+  "requires_human_review": false,
+  "review_reason": null,
+  "status": "aborted",
+  "trace_id": null,
+  "latency_ms": 1,
+  "abort_reason": "policy_blocked",
+  "started_at": 1778266117.686853,
+  "prompt_versions": {},
+  "experiment_id": null,
+  "variant": null
+}

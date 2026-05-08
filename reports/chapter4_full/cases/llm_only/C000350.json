@@ -1,0 +1,86 @@
+{
+  "case_id": "f664793761e740f0a9250365e97dba95",
+  "client_id": "C000350",
+  "raw_query": null,
+  "client_context": {
+    "Industry": "Healthcare",
+    "Region": "RU-TA",
+    "Business_Size": "medium",
+    "Years_in_Operation": 5,
+    "Client_Tenure": 3,
+    "Num_Products": 4,
+    "Has_Deposit": 1,
+    "Has_Card": 1,
+    "Has_Acquiring": 0,
+    "Has_Payroll": 0,
+    "Has_Loan": 1,
+    "Total_Bank_Profit": 109187.41,
+    "Avg_Monthly_Inflow": 1834409.32,
+    "Avg_Monthly_Outflow": 1290032.01,
+    "Monthly_Transaction_Count": 195,
+    "Avg_Account_Balance": 379535.13,
+    "Net_Cashflow": 544377.31,
+    "Activity_Bucket": "high",
+    "Balance_Bucket": "high",
+    "New_Product_Offer": 0,
+    "New_Product_Offer_Type": "none",
+    "Credit_Limit_Change": 0.0,
+    "Tariff_Discount": 1,
+    "Revenue_Growth_Rate": 0.0473,
+    "Revenue_Trend": "up"
+  },
+  "intervention_delta": {
+    "New_Product_Offer": 1,
+    "New_Product_Offer_Type": "payroll"
+  },
+  "policy_result": {
+    "blocked": false,
+    "reasons": [],
+    "notes": {}
+  },
+  "psm_result": null,
+  "rag_chunks": [
+    "[TITLE] Уровень обслуживания клиентов в Российских банках. Анализ клиентских данных. Целевой маркетинг и реализация кампаний | [DOC_ID] doc_04\n\nБаланс между привлечением\nновых клиентов и развитием\nотношений с текущими\nРоссийские банки мало используют развитие отношений с существующими\nклиентами для продажи им нескольких продуктов (например, посредством\nперекрестных/дополнительных продаж), уделяя первоочередное внимание\nпривлечению новых клиентов. Как правило, существующим клиентам предлагается не более одного-двух дополнительных продуктов.\nНедавнее вступление в силу закона об обязанности работодателя следовать\nпожеланию сотрудников о перечислении оплаты труда в предпочитаемые\nбанки должно сделать взаимоотношения банка и клиентов более долгосрочными и комплексными по предлагаемым продуктам.\nБольшинство участников исследования (70%) отметили, что проводят детальный анализ клиентских данных для удержания существующих клиентов\nи выявления клиентов, активность которых можно возобновить.\nВсе участники\nВ банке определены и постоянно отслеживаются\nфакторы, влияющие на уход клиента или его переход\nисследования утверждают,\nв статус неактивного\nчто в их банках определены\nфакторы, которые могут\nповлиять на уход клиента Определены, но\nобновляются 70%\nили переход его в статус\nнерегулярно\nнеактивного, однако\nперечень этих факторов Определены\n30% и регулярно\nобновляется регулярно\nобновляются\nлишь у 30% участников\nИсточник: анализ КПМГ.\nМеждународный\nопыт Качество обслуживания как основ- активация неактивных клиентов,\nной движущий фактор защиты кли- увеличение доходности по клиенту,",
+    "[TITLE] Факторы формирования лояльности клиентов в банковском секторе России | [DOC_ID] doc_05\n\nА. В. Славова, Н. П. Козлова1\nФАКТОРЫ ФОРМИРОВАНИЯ ЛОЯЛЬНОСТИ КЛИЕНТОВ В\nБАНКОВСКОМ СЕКТОРЕ РОССИИ\nА. Slavova, N. Kozlova. Factors influencing customer loyalty in the\nbanking sector of Russia\nАннотация. В статье рассматриваются факторы Abstract. This article explores the factors shaping\nформирования лояльности клиентов в банковском customer loyalty in the banking sector of Russia,\nсекторе России, предоставляя обзор различных providing an overview of various approaches to defining\nподходов к определению понятия лояльности на the concept of loyalty in the market of banking services.\nрынке банковских услуг. Исследование охватывает The research encompasses the current state of customer\nсовременное состояние уровня лояльности loyalty levels in Russian banks and analyzes its\nбанковских клиентов в России и анализирует его dynamics, including annual variations. The article also\nдинамику, ежегодные изменения. В структуре статьи meticulously examines the factors influencing the\nтакже подробно рассматриваются факторы, formation of customer loyalty in banks and identifies\nвлияющие на формирование лояльности клиентов barriers hindering this process. Special attention is given\nбанков, а также выявляются барьеры, to the advantages offered by the implementation of\nпрепятствующие этому процессу. Особое внимание loyalty programs for businesses in the banking sector.\nуделяется преимуществам, которые предоставляет Analysis of these aspects ensures a comprehensive",
+    "[TITLE] Финансовые рынки в период структурных сдвигов | [DOC_ID] doc_18\n\nDocument/File/142481/Consultation  .pdf Руководство по аутсорсингу от .2019 Е//2019/ «Guidelines on  arrangements» // https://www.eba.europa.eu/regulationand-policy/internal-governance/guidelines-on-outsourcing-arrangements   on Third-Party Relationships:   https://www.fdic.gov/news/financial-institution-letters/2023/fil23029.html   | 2/        2021 https://www.bankofengland.co.uk/-/media/boe/files/prudentialregulation/supervisory-statement/2021/ss221-march-.pdf     2017 https://www.apra.gov.au/sites/default/files/Prudential-Standard---Outsourcing%28July-2017%.pdf  of  Activities,    https://www.osfi-bsif.gc.ca/Eng/fi-if/rg-ro/gdn-ort/gl-ld/Pages/b10.aspx#toc7.   on  of    https://taxguru.in/rbi/master-direction-outsourcing-information-technology-services.\non Outsourcing.   of Singapore.  2016. https://www.mas.gov.sg/-/media/mas/regulations-and-financial-stability/\nregulatory-and-supervisory-framework/risk-management/outsourcing-guidelines jul-2016-revised-on--oct-2018.pdf;\ninstitutions, 2021 https://www.bot.go.tz/Publications/Acts,%20Regulations,%20Circulars,%20Guidelines/Guidelines/en/.pdf плу лун фл ов лдбьвЮ п бдлдн лтьлд вТТбкТтл твь б д фвьбьтлдло тж Тл ж клиентоориентированный подход и высокое так и организациями, аффилированными\nкачество предоставляемых услуг, что обеспе- с ним (внутригрупповой аутсорсинг уречивается возможностью замены компаний, гулирован, например, в Великобритании,\nработающих на аутсорсинге, привлечение Австралии, Пакистане). К выполнению"
+  ],
+  "rag_iterations": 1,
+  "rag_query_history": [
+    "Найдите данные PSM ATT, RAG и Graph по клиентам, получившим New_Product_Offer типа payroll: нужен знак и величина эффекта на активацию, глубину отношений, баланс продуктов и отклик на предложение, чтобы проверить, есть ли статистически подтверждённый эффект и каковы drivers_pos/drivers_neg. Также найдите сегментные профили и рекомендации по payroll offer, но только в связке с измеренным эффектом, чтобы не делать выводов по PROFILE без подтверждения из PSM/RAG/Graph."
+  ],
+  "graph_dsl": "",
+  "explanation": {
+    "diagnosis": "",
+    "drivers_pos": [
+      "Высокая активность и баланс повышают шанс отклика PROFILE.",
+      "На основании документа doc_04: клиенты удерживаются и развиваются (\"развитие отношений с текущими\")."
+    ],
+    "drivers_neg": [
+      "Уже 4 продукта: потенциал допродажи может быть ограничен PROFILE.",
+      "На основании документа doc_04: обычно дают лишь 1–2 продукта (\"не более одного-двух\")."
+    ],
+    "recommendations": [],
+    "expected_effect": "Приоритет: RAG → ожидается умеренный качественный рост глубины отношений; численно оценить нельзя. На основании doc_04 и doc_05: допродажи и лояльность связаны с удержанием, но PSM/GRAPH отсутствуют, поэтому высокая неопределённость. Для payroll-офера это может усилить удержание и расширить продуктовую глубину, однако точный эффект на Revenue_Growth_Rate и Total_Bank_Profit не подтверждён данными.",
+    "raw_text": "{\n  \"drivers_pos\": [\n    \"Высокая активность и баланс повышают шанс отклика PROFILE.\",\n    \"На основании документа doc_04: клиенты удерживаются и развиваются (\\\"развитие отношений с текущими\\\").\"\n  ],\n  \"drivers_neg\": [\n    \"Уже 4 продукта: потенциал допродажи может быть ограничен PROFILE.\",\n    \"На основании документа doc_04: обычно дают лишь 1–2 продукта (\\\"не более одного-двух\\\").\"\n  ],\n  \"expected_effect\": \"Приоритет: RAG → ожидается умеренный качественный рост глубины отношений; численно оценить нельзя. На основании doc_04 и doc_05: допродажи и лояльность связаны с удержанием, но PSM/GRAPH отсутствуют, поэтому высокая неопределённость. Для payroll-офера это может усилить удержание и расширить продуктовую глубину, однако точный эффект на Revenue_Growth_Rate и Total_Bank_Profit не подтверждён данными.\"\n}"
+  },
+  "critic_result": {
+    "passed": true,
+    "rule_issues": [],
+    "llm_issues": [],
+    "issues": []
+  },
+  "retry_count": 1,
+  "requires_human_review": false,
+  "review_reason": null,
+  "status": "done",
+  "trace_id": null,
+  "latency_ms": 16725,
+  "abort_reason": null,
+  "started_at": 1778265689.55466,
+  "prompt_versions": {
+    "base": "v1.0",
+    "whatif": "v1.0"
+  },
+  "experiment_id": null,
+  "variant": null
+}
