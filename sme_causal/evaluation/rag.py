@@ -1,5 +1,5 @@
 """
-RAGAS eval (no ground truth) + local embeddings intfloat/multilingual-e5-small
+RAGAS eval (no ground truth) + local embeddings intfloat/multilingual-e5-base
 TF disabled. LLM adapter supports async (RAGAS awaits it).
 """
 
@@ -80,7 +80,7 @@ class AgentLLMAdapter:
 
 
 class LocalE5Embeddings:
-    def __init__(self, model_name: str = "intfloat/multilingual-e5-small", device: str = "cpu"):
+    def __init__(self, model_name: str = "intfloat/multilingual-e5-base", device: str = "cpu"):
         logger.info(f"Loading embeddings: {model_name} device={device}")
         self.model = SentenceTransformer(model_name, device=device)
 
@@ -181,7 +181,7 @@ def main() -> None:
     dataset = build_ragas_dataset(rag, questions)
     logger.info(f"Dataset size: {len(dataset)}")
 
-    embeddings = LocalE5Embeddings("intfloat/multilingual-e5-small", device="cpu")
+    embeddings = LocalE5Embeddings("intfloat/multilingual-e5-base", device="cpu")
 
     result = evaluate(
         dataset=dataset,

@@ -33,7 +33,7 @@ class RAG:
     def __init__(
         self,
         cfg=get_config(),
-        model_name: str = "intfloat/multilingual-e5-small",
+        model_name: str = "intfloat/multilingual-e5-base",
         chunk_target: Tuple[int, int] = (1000, 1500),
         chunk_overlap: int = 120,
     ):
@@ -50,11 +50,13 @@ class RAG:
 
     # ===================== Публичные методы =====================
 
-    def build_chunks(self, use_metadata: bool = True) -> pd.DataFrame:
+    def build_chunks(
+        self, use_metadata: bool = True, write_to_disk: bool = True,
+    ) -> pd.DataFrame:
         """
         Читает все .txt из cfg.document_corpus_dir, режет по абзацам в ~1000–1500 символов
         с overlap ~120, при use_metadata=True — добавляет префикс "title / doc_id" в текст чанка,
-        и сохраняет parquet в cfg.chunks_path.
+        и при write_to_disk=True сохраняет parquet в cfg.chunks_path.
         Возвращает DataFrame: [chunk_id(int64), doc_id(str), text(str)].
         """
         corpus_dir = self.cfg.document_corpus_dir
@@ -98,13 +100,14 @@ class RAG:
         df = pd.DataFrame(rows, columns=["chunk_id", "doc_id", "text"])
         df["chunk_id"] = df["chunk_id"].astype("int64")
 
-        self._ensure_parent_dir(self.cfg.chunks_path)
-        df.to_parquet(self.cfg.chunks_path, index=False)
+        if write_to_disk:
+            self._ensure_parent_dir(self.cfg.chunks_path)
+            df.to_parquet(self.cfg.chunks_path, index=False)
         return df
 
     def build_embeddings(self, chunks: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Строит эмбеддинги (384d) для чанков через multilingual-e5-small.
+        Строит эмбеддинги (768d) для чанков через multilingual-e5-base.
         Берет df из аргумента или из cfg.chunks_path. Если его нет, сперва build_chunks().
         Сохраняет parquet в cfg.embeddings_path со столбцами:
           - chunk_id (int64)
