@@ -40,7 +40,7 @@ from sme_causal.graph.graph_utils import (
     export_graph,
     create_algo_edges,
 )
-from sme_causal.graph.evaluate_graphs import (
+from sme_causal.evaluation.graphs import (
     evaluate_graph,
     create_report_directory,
     create_edge_comparison_table,

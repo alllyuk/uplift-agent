@@ -16,27 +16,27 @@ using the Pollux judge model with task-specific criteria from Pollux criteria da
 ### Direct CLI Usage
 
 # Evaluate a specific client with default settings
-python -m sme_causal.app.evaluate_pollux \\
+python -m sme_causal.evaluation.pollux \\
     --client-id C000001 \\
     --output results.csv \\
     --device cuda
 
 # Evaluate first 100 clients from dataset
-python -m sme_causal.app.evaluate_pollux \\
+python -m sme_causal.evaluation.pollux \\
     --num-clients 100 \\
     --what-if "Tariff_Discount=1,Credit_Limit_Change=20" \\
     --use-graph --use-rag \\
     --output batch_results.csv
 
 # With custom what-if intervention and all enrichments enabled
-python -m sme_causal.app.evaluate_pollux \\
+python -m sme_causal.evaluation.pollux \\
     --client-id C000001 \\
     --what-if "Tariff_Discount=1,New_Product_Offer=2" \\
     --use-graph --use-rag --use-psm \\
     --output detailed_results.csv
 
 # Evaluate natural language query for first 5 clients
-python -m sme_causal.app.evaluate_pollux \\
+python -m sme_causal.evaluation.pollux \\
     --query "Should we offer acquiring to client C000001?" \\
     --use-graph --use-rag \\
     --output query_results.csv
@@ -44,7 +44,7 @@ python -m sme_causal.app.evaluate_pollux \\
 
 ### Programmatic Usage
 
-from sme_causal.app.evaluate_pollux import UpliftAgentEvaluator
+from sme_causal.evaluation.pollux import UpliftAgentEvaluator
 from sme_causal.agent.agent_service import CausalAgent
 from sme_causal.core.config import get_config
 from sme_causal.core.columns import CLIENT_ID
@@ -135,7 +135,7 @@ from sme_causal.core.config import get_config
 from sme_causal.core.columns import CLIENT_ID
 from sme_causal.core.utils import configure_logging, parse_client_id_and_intent
 from sme_causal.app.run import _run_psm
-from sme_causal.data.pollux_criteria import (
+from sme_causal.evaluation.pollux_criteria import (
     CriteriaItem,
     get_all_criteria,
 )

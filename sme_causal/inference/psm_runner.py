@@ -70,6 +70,7 @@ def run_psm(
     caliper: float = 0.05,
     match_ratio: int = 1,
     threshold: Optional[float] = None,
+    return_matched_df: bool = False,
 ) -> Dict[str, object]:
     """Run PSM analysis via CausalInferenceAnalyzer.
 
@@ -141,7 +142,7 @@ def run_psm(
         n_control=n_control,
     )
 
-    return {
+    result: Dict[str, object] = {
         "ok": True,
         "treatment_col": treatment_col,
         "outcome_col": outcome_col,
@@ -157,3 +158,11 @@ def run_psm(
         "n_control": n_control,
         **reliability,
     }
+    # Matched DataFrame is needed only for offline balance diagnostics. It is
+    # NOT exposed by default because the production pipeline serialises the
+    # entire dict into the LLM prompt (see orchestrator.critic), and a 500+ row
+    # matched table would explode the context. Evaluation scripts opt in
+    # explicitly via `return_matched_df=True`.
+    if return_matched_df:
+        result["matched_df"] = matched_df
+    return result

@@ -240,6 +240,69 @@ def _offer_type(rng: np.random.Generator, industry: str) -> str:
     return rng.choice(pool, p=np.array(weights))
 
 
+# -----------------------------------------------------------------------------
+# Single source of truth: modifiers and uplift sampling
+# -----------------------------------------------------------------------------
+#
+# These helpers are shared between `generate_sme_data` (factual sampling) and
+# `generate_with_counterfactuals` (potential-outcome sampling for non-treated).
+# Any change here propagates to both paths automatically — this is what
+# guarantees that the ground-truth ATT/ATE used for PSM evaluation match the
+# per-client uplifts that were actually injected into Revenue_Growth_Rate.
+
+def _compute_modifiers(
+    *,
+    avg_inflow: float,
+    avg_outflow: float,
+    avg_balance: float,
+) -> Dict[str, float]:
+    """Deterministic per-client modifiers used in uplift formulas."""
+    inflow_safe = avg_inflow + 1e-9
+    balance_to_inflow = avg_balance / inflow_safe
+    return {
+        "liquidity_pressure": 1.0 if balance_to_inflow < 0.45 else 0.0,
+        "price_sensitivity": (
+            0.6 * (avg_outflow / inflow_safe)
+            + 0.4 * (1.0 - min(1.0, balance_to_inflow))
+        ),
+    }
+
+
+def _sample_uplift_offer(
+    rng: np.random.Generator,
+    industry: str,
+    offer_type: str,
+    liquidity_pressure: float,
+) -> float:
+    """Sample revenue uplift conditional on the offer type and modifiers."""
+    if industry in {"Retail", "Hospitality"} and offer_type == "acquiring":
+        return float(rng.uniform(0.02, 0.06))
+    if offer_type == "loan" and liquidity_pressure > 0.0:
+        return float(rng.uniform(0.015, 0.05))
+    return float(rng.uniform(0.005, 0.02))
+
+
+def _sample_uplift_credit_positive(
+    rng: np.random.Generator,
+    liquidity_pressure: float,
+) -> float:
+    """Sample revenue uplift for a positive credit-limit change."""
+    return float(rng.uniform(0.01, 0.035) * (1.0 + 0.6 * liquidity_pressure))
+
+
+def _sample_uplift_credit_negative(rng: np.random.Generator) -> float:
+    """Sample revenue change for a negative credit-limit change."""
+    return float(rng.uniform(-0.02, -0.005))
+
+
+def _sample_uplift_discount(
+    rng: np.random.Generator,
+    price_sensitivity: float,
+) -> float:
+    """Sample revenue uplift for an applied tariff discount."""
+    return float(rng.uniform(0.008, 0.03) * price_sensitivity)
+
+
 @dataclass
 class SynthConfig:
     """Configuration parameters for synthetic data generation.
@@ -247,13 +310,27 @@ class SynthConfig:
     Attributes:
         n_clients: Number of synthetic SME clients to generate.
         seed: Random seed for reproducible generation.
+        confounded: If False (default), interventions are assigned almost at
+            random — independently of client covariates. This is the historical
+            mode and is suitable as a sanity baseline for PSM. If True,
+            intervention probabilities depend on the same covariates that drive
+            the outcome (industry, business size, total bank profit, liquidity
+            pressure, price sensitivity), creating observable confounding that
+            PSM is supposed to correct. The two modes use the same RNG-call
+            sequence — only the thresholds change — so reproducibility under
+            ``seed`` is preserved per mode.
     """
 
     n_clients: int = 3000
     seed: int = 42
+    confounded: bool = False
 
 
-def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
+def generate_sme_data(
+    cfg: SynthConfig,
+    *,
+    include_audit_columns: bool = False,
+) -> pd.DataFrame:
     """Generate synthetic SME client data with realistic causal relationships.
 
     Creates synthetic data for SME (Small and Medium Enterprises) clients with
@@ -262,9 +339,20 @@ def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
 
     Args:
         cfg: Configuration object containing generation parameters.
+        include_audit_columns: If True, the returned DataFrame additionally
+            contains internal sampling components used for ground-truth
+            evaluation: ``_uplift_offer_factual``, ``_uplift_credit_factual``,
+            ``_uplift_discount_factual``, ``_growth_base``, ``_noise_eps``,
+            ``_liquidity_pressure``, ``_price_sensitivity``. These columns
+            constitute oracle information about the true treatment effect and
+            **must not** leak into causal-discovery training, prompts to the
+            LLM, or any production data flow — set this flag only inside
+            evaluation scripts.
 
     Returns:
-        DataFrame with synthetic client data including all feature columns.
+        DataFrame with synthetic client data. The shape and column set are
+        identical to the previous behaviour unless ``include_audit_columns``
+        is enabled.
     """
     logger.info(
         f"Starting synthetic data generation for {cfg.n_clients} clients"
@@ -321,53 +409,100 @@ def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
             + 15_000 * ("acquiring" in prod_types)
         ) * rng.uniform(0.6, 1.4)
 
-        # Интервенции
-        new_offer_flag = int(rng.random() < 0.25)
+        # Модификаторы (без rng) — вычисляются здесь, потому что в
+        # confounded-режиме они нужны для назначения интервенций. Их же
+        # используют ниже формулы uplift'а, что снимает любое расхождение
+        # между условиями назначения и величины эффекта.
+        _mods_now = _compute_modifiers(
+            avg_inflow=base_inflow,
+            avg_outflow=avg_outflow,
+            avg_balance=avg_balance,
+        )
+        liquidity_pressure = _mods_now["liquidity_pressure"]
+        price_sensitivity = _mods_now["price_sensitivity"]
+
+        # Вероятности назначения интервенций.
+        # В randomized-режиме (confounded=False) — фиксированные пороги, как
+        # в исходном генераторе; PSM здесь подтверждает только корректность
+        # реализации матчинга на почти случайных данных.
+        # В confounded-режиме — вероятности зависят от ковариат, формирующих
+        # одновременно и outcome (т. е. рисуется наблюдаемое смещение), что и
+        # является целевой нагрузкой для метода propensity-score-matching.
+        if cfg.confounded:
+            # Используем total_profit напрямую: тогда ребро
+            # `Total_Bank_Profit -> New_Product_Offer` в ground_truth_edges
+            # отражает реальную зависимость в коде, а не прокси через
+            # коррелирующий base_inflow. Делитель 50_000 нормирует значение
+            # к разумному диапазону: для small/medium бизнеса total_profit
+            # ~ 5_000–80_000, что после деления даёт 0.1–1.6.
+            profit_intensity = min(total_profit / 50_000.0, 2.5)
+            industry_offer_bonus = 0.05 if industry in {"Retail", "Hospitality"} else 0.0
+            size_offer_bonus = (
+                0.04 if size == "medium"
+                else 0.02 if size == "small"
+                else 0.0
+            )
+            p_offer = max(
+                0.05,
+                min(0.55,
+                    0.08 + 0.10 * profit_intensity + industry_offer_bonus + size_offer_bonus),
+            )
+            p_credit_event = max(
+                0.05,
+                min(0.45, 0.08 + 0.20 * liquidity_pressure),
+            )
+            p_discount = max(
+                0.05,
+                min(0.50, 0.08 + 0.30 * price_sensitivity),
+            )
+        else:
+            p_offer = 0.25
+            p_credit_event = 0.18
+            p_discount = 0.22
+
+        new_offer_flag = int(rng.random() < p_offer)
         new_offer_type = (
             _offer_type(rng, industry) if new_offer_flag else "none"
         )
         credit_limit_change = 0.0
-        if rng.random() < 0.18:
-            credit_limit_change = rng.normal(
-                12, 8
-            )  # % изменение лимита, чаще +/-
-        tariff_discount = int(rng.random() < 0.22)
+        if rng.random() < p_credit_event:
+            if cfg.confounded and liquidity_pressure > 0.0:
+                # Под confounding — клиенты с давлением на ликвидность
+                # систематически получают увеличение лимита (положительный сдвиг)
+                credit_limit_change = rng.normal(15, 6)
+            else:
+                credit_limit_change = rng.normal(12, 8)
+        tariff_discount = int(rng.random() < p_discount)
 
-        # Базовый рост + влияние интервенций и «ликвидности»
+        # Базовый рост; модификаторы (liquidity_pressure, price_sensitivity)
+        # уже вычислены выше при назначении интервенций.
         growth_base = _industry_trend(industry) + rng.normal(0.0, 0.02)
-        liquidity_pressure = (
-            1.0 if (avg_balance / (base_inflow + 1e-9)) < 0.45 else 0.0
+
+        uplift_offer = (
+            _sample_uplift_offer(
+                rng, industry, new_offer_type, liquidity_pressure,
+            )
+            if new_offer_flag
+            else 0.0
         )
 
-        uplift_offer = 0.0
-        if new_offer_flag:
-            if (
-                industry in {"Retail", "Hospitality"}
-                and new_offer_type == "acquiring"
-            ):
-                uplift_offer = rng.uniform(0.02, 0.06)
-            elif new_offer_type == "loan" and liquidity_pressure > 0.0:
-                uplift_offer = rng.uniform(0.015, 0.05)
-            else:
-                uplift_offer = rng.uniform(0.005, 0.02)
-
-        uplift_credit = 0.0
         if credit_limit_change > 0:
-            uplift_credit = rng.uniform(0.01, 0.035) * (
-                1.0 + 0.6 * liquidity_pressure
-            )
+            uplift_credit = _sample_uplift_credit_positive(rng, liquidity_pressure)
         elif credit_limit_change < 0:
-            uplift_credit = rng.uniform(-0.02, -0.005)
+            uplift_credit = _sample_uplift_credit_negative(rng)
+        else:
+            uplift_credit = 0.0
 
-        price_sensitivity = 0.6 * (avg_outflow / (base_inflow + 1e-9)) + 0.4 * (1.0 - min(1.0, avg_balance / (base_inflow + 1e-9)))
-        uplift_discount = rng.uniform(0.008, 0.03) * price_sensitivity if tariff_discount else 0.0
+        uplift_discount = (
+            _sample_uplift_discount(rng, price_sensitivity)
+            if tariff_discount
+            else 0.0
+        )
+
+        noise_eps = float(rng.normal(0.0, 0.01))
 
         revenue_growth_rate = float(
-            growth_base
-            + uplift_offer
-            + uplift_credit
-            + uplift_discount
-            + rng.normal(0.0, 0.01)
+            growth_base + uplift_offer + uplift_credit + uplift_discount + noise_eps
         )
         if revenue_growth_rate > 0.02:
             trend = "up"
@@ -406,6 +541,16 @@ def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
                 # Outcomes
                 "Revenue_Growth_Rate": round(revenue_growth_rate, 4),
                 "Revenue_Trend": trend,
+                # Внутренние компоненты, использованные при генерации.
+                # Сохраняются для аудита и для расчёта эмпирического эталона
+                # ATT/ATE при оценке PSM (см. generate_with_counterfactuals).
+                "_uplift_offer_factual": round(uplift_offer, 6),
+                "_uplift_credit_factual": round(uplift_credit, 6),
+                "_uplift_discount_factual": round(uplift_discount, 6),
+                "_growth_base": round(growth_base, 6),
+                "_noise_eps": round(noise_eps, 6),
+                "_liquidity_pressure": liquidity_pressure,
+                "_price_sensitivity": round(price_sensitivity, 6),
             }
         )
 
@@ -433,6 +578,14 @@ def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
         lambda v: _to_bucket(v, balance_tertiles[0], balance_tertiles[1])
     )
 
+    if not include_audit_columns:
+        # Drop oracle columns to prevent ground-truth leakage into downstream
+        # consumers (CSV exports, causal-discovery algorithms, RAG corpora,
+        # LLM prompts). Evaluation scripts opt in via include_audit_columns=True.
+        audit_cols = [c for c in df.columns if str(c).startswith("_")]
+        if audit_cols:
+            df = df.drop(columns=audit_cols)
+
     logger.success(
         f"Generated synthetic dataset with {len(df)} clients and {len(df.columns)} features"
     )
@@ -440,18 +593,35 @@ def generate_sme_data(cfg: SynthConfig) -> pd.DataFrame:
     return df
 
 
-def ground_truth_edges() -> List[Dict]:
-    """Generate ground truth causal edges from the synthetic data generation process.
+def ground_truth_edges(*, confounded: bool = False) -> List[Dict]:
+    """Ground-truth causal edges actually realised by the synthetic generator.
 
-    Returns the actual causal relationships (DAG edges) that were used in the
-    synthetic data generation. Each edge includes source, target, sign, and rationale.
+    The set of edges depends on the generation mode declared in
+    :class:`SynthConfig`:
+
+    - ``confounded=False`` (randomized intervention assignment) — only those
+      edges that the generator actually produces. Treatment indicators
+      (``New_Product_Offer``, ``Credit_Limit_Change``, ``Tariff_Discount``)
+      are independent of covariates, so no covariate→intervention edges
+      exist in the ground truth.
+    - ``confounded=True`` (intervention assignment depends on covariates) —
+      additionally includes the realised covariate→intervention edges:
+      ``Total_Bank_Profit → New_Product_Offer``,
+      ``Industry → New_Product_Offer``,
+      ``Business_Size → New_Product_Offer``,
+      ``Avg_Account_Balance → Credit_Limit_Change``,
+      ``Avg_Monthly_Inflow → Credit_Limit_Change``,
+      ``Avg_Monthly_Outflow → Tariff_Discount``,
+      ``Avg_Account_Balance → Tariff_Discount``.
+
+    The two graphs differ only in those mode-specific edges; everything else
+    (industry → outcome, intervention → outcome, etc.) is identical.
+
+    Args:
+        confounded: Match the assignment regime of the data generator.
 
     Returns:
-        List of dictionaries representing causal edges with keys:
-        - source: Source variable name
-        - target: Target variable name
-        - sign: Relationship direction (+ or -)
-        - rationale: Human-readable explanation of the relationship
+        List of edges with keys ``source``, ``target``, ``sign``, ``rationale``.
     """
     E = []
 
@@ -524,13 +694,64 @@ def ground_truth_edges() -> List[Dict]:
         "Больше продуктов — выше прибыль",
     )
 
-    add(
-        "Total_Bank_Profit", 
-        "New_Product_Offer", 
-        "+", 
-        "Прибыльным клиентам предлагают больше продуктов",
+    # Конфаундирующие рёбра — реализуются только в confounded-режиме
+    # (см. SynthConfig.confounded). В randomized-режиме (по умолчанию)
+    # назначение интервенций не зависит от ковариат, и эти рёбра отсутствуют.
+    if confounded:
+        add(
+            "Total_Bank_Profit",
+            "New_Product_Offer",
+            "+",
+            "Confounding: прибыльным клиентам чаще делают предложение",
         )
-
+        add(
+            "Industry",
+            "New_Product_Offer",
+            "+",
+            "Confounding: розница/HoReCa получают предложения чаще",
+        )
+        add(
+            "Business_Size",
+            "New_Product_Offer",
+            "+",
+            "Confounding: средний и малый бизнес получают предложения чаще микро",
+        )
+        add(
+            "Avg_Account_Balance",
+            "Credit_Limit_Change",
+            "-",
+            "Confounding: низкий баланс → давление на ликвидность → выше "
+            "вероятность изменения лимита (через liquidity_pressure)",
+        )
+        add(
+            "Avg_Monthly_Inflow",
+            "Credit_Limit_Change",
+            "-",
+            "Confounding: низкий приток → давление на ликвидность → выше "
+            "вероятность изменения лимита (через liquidity_pressure)",
+        )
+        add(
+            "Avg_Monthly_Outflow",
+            "Tariff_Discount",
+            "+",
+            "Confounding: высокий отток → высокая ценовая чувствительность → "
+            "выше вероятность скидки (через price_sensitivity)",
+        )
+        add(
+            "Avg_Account_Balance",
+            "Tariff_Discount",
+            "-",
+            "Confounding: низкий баланс → высокая ценовая чувствительность → "
+            "выше вероятность скидки (через price_sensitivity)",
+        )
+        add(
+            "Avg_Monthly_Inflow",
+            "Tariff_Discount",
+            "-",
+            "Confounding: низкий приток → высокая ценовая чувствительность "
+            "(price_sensitivity зависит от inflow в знаменателе обеих "
+            "компонент: outflow/inflow и balance/inflow)",
+        )
 
     # Transactional
     add(
@@ -612,9 +833,189 @@ def ground_truth_edges() -> List[Dict]:
         "Объем баланса позволяет инвестировать в рост",
         )
 
-    add("Industry", 
-        "Revenue_Growth_Rate", 
-        "+", 
+    add("Industry",
+        "Revenue_Growth_Rate",
+        "+",
         "Отраслевой тренд роста"
     )
     return E
+
+
+# -----------------------------------------------------------------------------
+# Ground-truth treatment effects for PSM evaluation
+# -----------------------------------------------------------------------------
+#
+# The synthetic generator above samples each per-client uplift from a uniform
+# distribution conditional on industry, liquidity pressure, etc. To validate
+# PSM against a true effect, we need the *expected* uplift conditional on the
+# observed covariates — i.e. the per-client CATE the matching procedure should
+# recover. The functions below compute these expectations analytically from the
+# same parameters used in `generate_sme_data`.
+
+# Industry-conditional weights for product offer types (mirror `_offer_type`).
+_OFFER_TYPE_WEIGHTS: Dict[str, Dict[str, float]] = {
+    "Retail":       {"loan": 0.15, "acquiring": 0.55, "card": 0.20, "payroll": 0.10},
+    "Hospitality":  {"loan": 0.15, "acquiring": 0.55, "card": 0.20, "payroll": 0.10},
+    "Manufacturing":{"loan": 0.55, "acquiring": 0.15, "card": 0.15, "payroll": 0.15},
+    "Construction": {"loan": 0.55, "acquiring": 0.15, "card": 0.15, "payroll": 0.15},
+    "IT_Services":  {"loan": 0.20, "acquiring": 0.15, "card": 0.45, "payroll": 0.20},
+    "Healthcare":   {"loan": 0.35, "acquiring": 0.20, "card": 0.25, "payroll": 0.20},
+}
+
+
+def _expected_uplift_offer(industry: str, liquidity_pressure: float) -> float:
+    """Expected revenue uplift if `New_Product_Offer` is hypothetically applied.
+
+    Mirrors the conditional logic of `generate_sme_data` but takes midpoints
+    of the underlying uniform distributions instead of single samples.
+    """
+    weights = _OFFER_TYPE_WEIGHTS[industry]
+    expected = 0.0
+    for offer_type, w in weights.items():
+        if industry in {"Retail", "Hospitality"} and offer_type == "acquiring":
+            mean_uplift = 0.04          # midpoint of U(0.02, 0.06)
+        elif offer_type == "loan" and liquidity_pressure > 0.0:
+            mean_uplift = 0.0325        # midpoint of U(0.015, 0.05)
+        else:
+            mean_uplift = 0.0125        # midpoint of U(0.005, 0.02)
+        expected += w * mean_uplift
+    return expected
+
+
+def _expected_uplift_credit_positive(liquidity_pressure: float) -> float:
+    """Expected revenue uplift if `Credit_Limit_Change > 0` is hypothetically applied."""
+    # Midpoint of U(0.01, 0.035) is 0.0225; multiplier (1 + 0.6 * liq_pressure).
+    return 0.0225 * (1.0 + 0.6 * liquidity_pressure)
+
+
+def _expected_uplift_discount(price_sensitivity: float) -> float:
+    """Expected revenue uplift if `Tariff_Discount` is hypothetically applied."""
+    # Midpoint of U(0.008, 0.03) is 0.019.
+    return 0.019 * price_sensitivity
+
+
+def generate_with_counterfactuals(
+    cfg: SynthConfig,
+) -> Tuple[pd.DataFrame, Dict[str, Dict[str, float]]]:
+    """Generate synthetic data and per-client *empirical* treatment effects.
+
+    Per-client CATE is built from the actual uplift draws used by the
+    generator: for treated clients it equals the factual uplift sample
+    (`_uplift_*_factual`), for non-treated clients it is sampled with the same
+    formulas using a *separate* RNG seeded as ``cfg.seed + 10_000_000``. This
+    keeps `generate_sme_data` bit-for-bit reproducible and removes any
+    distance between the data and the ground truth used for PSM evaluation.
+
+    True ATE = mean of per-client CATE across the population.
+    True ATT = mean of CATE on actually-treated clients
+              (collapses to the mean of factual uplift on those clients).
+
+    For each intervention we additionally return the analytical expectation
+    (midpoints of the underlying uniforms, weighted by industry probabilities
+    where applicable). It serves as a convergence check: at large N it should
+    match the empirical figure up to ``σ / √n`` noise.
+    """
+    df = generate_sme_data(cfg, include_audit_columns=True)
+
+    rng_cf = np.random.default_rng(cfg.seed + 10_000_000)
+    n = len(df)
+
+    industry_arr = df["Industry"].to_numpy()
+    liq_arr = df["_liquidity_pressure"].to_numpy()
+    price_arr = df["_price_sensitivity"].to_numpy()
+
+    factual_offer = df["_uplift_offer_factual"].to_numpy()
+    factual_credit = df["_uplift_credit_factual"].to_numpy()
+    factual_discount = df["_uplift_discount_factual"].to_numpy()
+
+    treated_offer = (df["New_Product_Offer"].to_numpy() == 1)
+    treated_credit_positive = (df["Credit_Limit_Change"].to_numpy() > 0)
+    treated_discount = (df["Tariff_Discount"].to_numpy() == 1)
+
+    # Per-client potential-outcome contrast (CATE).
+    # Sequential loop because `_offer_type` and `_sample_uplift_*` consume the
+    # counterfactual RNG one client at a time; the order is deterministic in
+    # `cfg.seed`.
+    cate_offer = np.empty(n, dtype=float)
+    cate_credit_positive = np.empty(n, dtype=float)
+    cate_discount = np.empty(n, dtype=float)
+
+    for i in range(n):
+        ind = str(industry_arr[i])
+        lp = float(liq_arr[i])
+        ps = float(price_arr[i])
+
+        # Offer
+        if treated_offer[i]:
+            cate_offer[i] = factual_offer[i]
+        else:
+            cf_offer_type = _offer_type(rng_cf, ind)
+            cate_offer[i] = _sample_uplift_offer(rng_cf, ind, cf_offer_type, lp)
+
+        # Credit limit, binarised on the positive direction
+        if treated_credit_positive[i]:
+            cate_credit_positive[i] = factual_credit[i]  # already > 0
+        else:
+            cate_credit_positive[i] = _sample_uplift_credit_positive(rng_cf, lp)
+
+        # Tariff discount
+        if treated_discount[i]:
+            cate_discount[i] = factual_discount[i]
+        else:
+            cate_discount[i] = _sample_uplift_discount(rng_cf, ps)
+
+    # Analytical expectations (asymptotic check, do not enter the PSM benchmark).
+    cate_offer_analytical = np.array([
+        _expected_uplift_offer(ind, lp)
+        for ind, lp in zip(industry_arr, liq_arr)
+    ])
+    cate_credit_pos_analytical = np.array([
+        _expected_uplift_credit_positive(lp) for lp in liq_arr
+    ])
+    cate_discount_analytical = np.array([
+        _expected_uplift_discount(ps) for ps in price_arr
+    ])
+
+    df = df.assign(
+        cate_offer=cate_offer.round(6),
+        cate_credit_positive=cate_credit_positive.round(6),
+        cate_discount=cate_discount.round(6),
+        T_credit_positive=treated_credit_positive.astype(int),
+    )
+
+    def _att(cate: np.ndarray, treated: np.ndarray) -> float:
+        return float(cate[treated].mean()) if treated.any() else float("nan")
+
+    true_effects: Dict[str, Dict[str, float]] = {
+        "New_Product_Offer": {
+            "ate": float(cate_offer.mean()),
+            "att": _att(cate_offer, treated_offer),
+            "n_treated_factual": int(treated_offer.sum()),
+            "ate_analytical": float(cate_offer_analytical.mean()),
+            "att_analytical": _att(cate_offer_analytical, treated_offer),
+        },
+        "Credit_Limit_Change_positive": {
+            "ate": float(cate_credit_positive.mean()),
+            "att": _att(cate_credit_positive, treated_credit_positive),
+            "n_treated_factual": int(treated_credit_positive.sum()),
+            "ate_analytical": float(cate_credit_pos_analytical.mean()),
+            "att_analytical": _att(cate_credit_pos_analytical, treated_credit_positive),
+        },
+        "Tariff_Discount": {
+            "ate": float(cate_discount.mean()),
+            "att": _att(cate_discount, treated_discount),
+            "n_treated_factual": int(treated_discount.sum()),
+            "ate_analytical": float(cate_discount_analytical.mean()),
+            "att_analytical": _att(cate_discount_analytical, treated_discount),
+        },
+    }
+
+    logger.info(
+        "Counterfactual generation: n={}; "
+        "empirical ATT offer={:.4f}, credit+={:.4f}, discount={:.4f}",
+        len(df),
+        true_effects["New_Product_Offer"]["att"],
+        true_effects["Credit_Limit_Change_positive"]["att"],
+        true_effects["Tariff_Discount"]["att"],
+    )
+    return df, true_effects

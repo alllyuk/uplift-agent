@@ -36,7 +36,7 @@ def test_edges_to_digraph_and_graph_to_dict_roundtrip():
 
 
 def test_create_edge_comparison_table_columns():
-    from sme_causal.graph.evaluate_graphs import create_edge_comparison_table
+    from sme_causal.evaluation.graphs import create_edge_comparison_table
 
     gt = [
         {"source": "A", "target": "B", "sign": "+"},
@@ -65,7 +65,7 @@ def test_create_edge_comparison_table_columns():
     assert fp_row["Found_In_Graph"] == "Yes"
 
 def test_evaluate_graph_metrics():
-    from sme_causal.graph.evaluate_graphs import evaluate_graph
+    from sme_causal.evaluation.graphs import evaluate_graph
 
     tiny_gt = [
         {"source": "A", "target": "B", "sign": "+"},
