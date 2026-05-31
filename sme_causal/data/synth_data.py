@@ -611,6 +611,7 @@ def ground_truth_edges(*, confounded: bool = False) -> List[Dict]:
       ``Business_Size → New_Product_Offer``,
       ``Avg_Account_Balance → Credit_Limit_Change``,
       ``Avg_Monthly_Inflow → Credit_Limit_Change``,
+      ``Avg_Monthly_Inflow → Tariff_Discount``,
       ``Avg_Monthly_Outflow → Tariff_Discount``,
       ``Avg_Account_Balance → Tariff_Discount``.
 

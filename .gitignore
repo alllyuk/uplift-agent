@@ -11,6 +11,7 @@ __pycache__/
 
 artifacts/
 reports/
+VKR/
 
 # --- RAG: keep document_corpus/ (source texts), ignore derived artifacts ---
 rag_data/chunks.parquet
@@ -32,6 +33,8 @@ ENV/
 *.iml
 .DS_Store
 .codex
+.claude/
+.agents/
 
 # --- Jupyter / IPython ---
 .ipynb_checkpoints/

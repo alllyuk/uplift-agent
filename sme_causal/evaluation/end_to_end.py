@@ -43,8 +43,9 @@ import pandas as pd
 from loguru import logger
 
 from sme_causal.core.config import get_config
+from sme_causal.core.columns import CLIENT_ID
 from sme_causal.core.llm import invoke_with_fallback
-from sme_causal.core.utils import parse_json_obj_from_text
+from sme_causal.core.utils import parse_json_obj_from_text, sanity_checks
 from sme_causal.orchestrator.pipeline import Pipeline
 from sme_causal.orchestrator.state import CaseState
 
@@ -62,21 +63,22 @@ ABLATION_VARIANTS: List[Dict[str, Any]] = [
 ]
 
 # Pool of interventions; we cycle through them across clients to diversify cases.
-INTERVENTION_POOL: List[Dict[str, Any]] = [
-    {"New_Product_Offer": 1, "New_Product_Offer_Type": "acquiring"},
-    {"New_Product_Offer": 1, "New_Product_Offer_Type": "payroll"},
-    {"New_Product_Offer": 1, "New_Product_Offer_Type": "deposit"},
-    {"Credit_Limit_Change": 15.0},
-    {"Credit_Limit_Change": 25.0},
-    {"Tariff_Discount": 1},
-]
+INTERVENTION_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "acquiring": {"New_Product_Offer": 1, "New_Product_Offer_Type": "acquiring"},
+    "payroll": {"New_Product_Offer": 1, "New_Product_Offer_Type": "payroll"},
+    "deposit": {"New_Product_Offer": 1, "New_Product_Offer_Type": "deposit"},
+    "credit15": {"Credit_Limit_Change": 15.0},
+    "credit25": {"Credit_Limit_Change": 25.0},
+    "tariff": {"Tariff_Discount": 1},
+}
+INTERVENTION_POOL: List[Dict[str, Any]] = list(INTERVENTION_REGISTRY.values())
 
 # Prices per 1k tokens for gpt-5.4-mini family (approximate; only used for
 # rough USD estimate per case).
 USD_PER_1K_INPUT = 0.00015
 USD_PER_1K_OUTPUT = 0.0006
 
-JUDGE_PROMPT_TEMPLATE = """\
+STRICT_JUDGE_PROMPT_TEMPLATE = """\
 Ты — рецензент топ-конференции по применению ИИ в финансовом секторе. Твоя задача — оценить
 качество ответа аналитического агента, сгенерированного для конкретной клиентской ситуации
 малого / микробизнеса.
@@ -113,6 +115,67 @@ JUDGE_PROMPT_TEMPLATE = """\
   "recommendation_quality":  {{"reasoning": "...", "score": <int 0-5>}}
 }}
 """
+
+ACCEPTANCE_JUDGE_PROMPT_TEMPLATE = """\
+Ты — эксперт банка-партнёра, проверяющий, пригоден ли ответ аналитического агента
+для первого рабочего использования в процессе оценки клиентских интервенций ММБ.
+Оцени не как научную статью и не как идеальную консультацию, а как практический
+артефакт поддержки решения: можно ли аналитику понять основания рекомендации,
+увидеть источники, риски и ожидаемый эффект.
+
+Контекст кейса:
+- Клиент (профиль): {context}
+- Запрашиваемая интервенция: {delta}
+- Числовая PSM-оценка: {psm}
+- RAG-фрагменты: {rag}
+- Причинно-следственный граф (DSL): {graph}
+
+Ответ агента (структурированный):
+{explanation}
+
+Шкала 0-5:
+- 5 — ответ можно использовать без существенных правок; основания, ограничения и вывод ясны.
+- 4 — ответ пригоден для рабочего использования; возможны мелкие редакционные правки
+  или уточнения, но они не меняют управленческий вывод.
+- 3 — черновик полезен, но требует заметной доработки аналитиком перед использованием.
+- 2 — есть существенные пробелы в основаниях или логике.
+- 1 — ответ почти не помогает принять решение.
+- 0 — ответ противоречит данным или непригоден.
+
+Правила оценки:
+- Не требуй коммерческий скрипт продажи, если он не был запрошен; оцени именно
+  обоснованность интервенции и понятность вывода.
+- Не снижай балл только за осторожное хеджирование: при слабой PSM-оценке или
+  отсутствии прямого пути в графе осторожность является корректным поведением.
+- Не требуй дословной цитаты каждого RAG-фрагмента; достаточно, чтобы утверждения
+  были согласованы с переданными источниками и не противоречили им.
+- Если ответ использует профиль клиента, PSM, RAG и граф в достаточной для аналитика
+  степени, базовый уровень по соответствующему критерию — 4.
+- Ставь ниже 4 только при ошибке, которая реально мешает аналитику использовать ответ.
+
+Критерии:
+- USE_OF_CONTEXT — насколько ответ опирается на переданные данные (профиль, PSM, RAG, граф),
+  а не на общее знание модели.
+- CAUSAL_REASONING — логическая связность утверждений и согласованность факторов с
+  причинно-следственной структурой.
+- INTERPRETABILITY — ясность изложения, структурность, прослеживаемость ключевых утверждений
+  к источникам.
+- RECOMMENDATION_QUALITY — релевантность и применимость вывода именно к запрошенной
+  интервенции, адекватность хеджирования при слабых данных.
+
+Верни СТРОГО JSON без markdown:
+{{
+  "use_of_context":          {{"reasoning": "...", "score": <int 0-5>}},
+  "causal_reasoning":        {{"reasoning": "...", "score": <int 0-5>}},
+  "interpretability":        {{"reasoning": "...", "score": <int 0-5>}},
+  "recommendation_quality":  {{"reasoning": "...", "score": <int 0-5>}}
+}}
+"""
+
+JUDGE_PROMPTS = {
+    "strict": STRICT_JUDGE_PROMPT_TEMPLATE,
+    "acceptance": ACCEPTANCE_JUDGE_PROMPT_TEMPLATE,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -185,10 +248,55 @@ def _summarise_state_for_judge(state: CaseState) -> Dict[str, str]:
     }
 
 
-def _llm_judge(state: CaseState, model: str, api_key: Optional[str]) -> Dict[str, Any]:
+def _parse_intervention_pool(names: Optional[str]) -> List[Dict[str, Any]]:
+    if not names:
+        return [dict(x) for x in INTERVENTION_POOL]
+    out: List[Dict[str, Any]] = []
+    for raw in names.split(","):
+        name = raw.strip()
+        if not name:
+            continue
+        if name not in INTERVENTION_REGISTRY:
+            allowed = ", ".join(sorted(INTERVENTION_REGISTRY))
+            raise ValueError(f"Unknown intervention '{name}'. Allowed: {allowed}")
+        out.append(dict(INTERVENTION_REGISTRY[name]))
+    if not out:
+        raise ValueError("Empty intervention pool")
+    return out
+
+
+def _select_applicable_client_ids(
+    df: pd.DataFrame,
+    intervention_pool: Sequence[Dict[str, Any]],
+    n: int,
+    *,
+    scan_limit: Optional[int] = None,
+) -> List[str]:
+    """Pick client IDs that pass policy for the next cycled intervention."""
+    selected: List[str] = []
+    scan_df = df.head(scan_limit) if scan_limit else df
+    for _, row in scan_df.iterrows():
+        delta = dict(intervention_pool[len(selected) % len(intervention_pool)])
+        if not sanity_checks(row.to_dict(), delta).get("blocked"):
+            selected.append(str(row[CLIENT_ID]))
+            if len(selected) >= n:
+                return selected
+    raise ValueError(
+        f"Only {len(selected)} applicable clients found for {n} requested "
+        f"with intervention pool of size {len(intervention_pool)}"
+    )
+
+
+def _llm_judge(
+    state: CaseState,
+    model: str,
+    api_key: Optional[str],
+    *,
+    rubric: str = "acceptance",
+) -> Dict[str, Any]:
     summary = _summarise_state_for_judge(state)
     explanation_text = _explanation_text(state) or "ответ не сгенерирован"
-    prompt = JUDGE_PROMPT_TEMPLATE.format(
+    prompt = JUDGE_PROMPTS[rubric].format(
         explanation=explanation_text,
         **summary,
     )
@@ -259,6 +367,8 @@ def run_ablation(
     out_dir: Path,
     *,
     seed: int = 42,
+    variants: Optional[Sequence[str]] = None,
+    intervention_pool: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """E1 + E3 + E4 + E6: run pipeline over (client × ablation-variant) grid."""
     rng = np.random.default_rng(seed)
@@ -266,18 +376,24 @@ def run_ablation(
     cases_root = out_dir / "cases"
     cases_root.mkdir(parents=True, exist_ok=True)
 
+    selected_variants = (
+        [v for v in ABLATION_VARIANTS if v["name"] in set(variants)]
+        if variants else ABLATION_VARIANTS
+    )
+    pool = [dict(x) for x in (intervention_pool or INTERVENTION_POOL)]
+
     # Pre-pick intervention per client deterministically so all variants for the
     # same client run with the same delta — clean ablation.
     client_to_delta: Dict[str, Dict[str, Any]] = {}
     for i, cid in enumerate(client_ids):
-        delta = INTERVENTION_POOL[i % len(INTERVENTION_POOL)]
+        delta = pool[i % len(pool)]
         client_to_delta[cid] = dict(delta)
 
-    total = len(client_ids) * len(ABLATION_VARIANTS)
+    total = len(client_ids) * len(selected_variants)
     done = 0
     for cid in client_ids:
         delta = client_to_delta[cid]
-        for variant in ABLATION_VARIANTS:
+        for variant in selected_variants:
             t0 = time.time()
             try:
                 state = _run_one(df, cid, delta, variant)
@@ -325,6 +441,7 @@ def run_judge(
     model: str,
     api_key: Optional[str],
     max_workers: int = 4,
+    rubric: str = "acceptance",
 ) -> List[Dict[str, Any]]:
     """E5: LLM-judge every case from the ablation grid."""
     cases_root = out_dir / "cases"
@@ -338,7 +455,7 @@ def run_judge(
         if state.get("status") not in ("done", "degraded"):
             return {"client_id": row["client_id"], "variant": row["variant"],
                     "scored": False, "status": state.get("status")}
-        verdict = _llm_judge(state, model=model, api_key=api_key)
+        verdict = _llm_judge(state, model=model, api_key=api_key, rubric=rubric)
         out = {
             "client_id": row["client_id"],
             "variant": row["variant"],
@@ -373,6 +490,8 @@ def run_judge(
             scored.append(fut.result())
     df_scored = pd.DataFrame(scored)
     df_scored.to_csv(out_dir / "judge_scores.csv", index=False)
+    with open(out_dir / "judge_meta.json", "w", encoding="utf-8") as fh:
+        json.dump({"model": model, "rubric": rubric}, fh, ensure_ascii=False, indent=2)
     return scored
 
 
@@ -461,6 +580,7 @@ def run_robustness(
     *,
     model: str,
     api_key: Optional[str],
+    intervention_pool: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """E7: feed identical evidence with two system-prompt variants and compare.
 
@@ -478,9 +598,10 @@ def run_robustness(
     rows: List[Dict[str, Any]] = []
     cases_root = out_dir / "robustness_cases"
     cases_root.mkdir(parents=True, exist_ok=True)
+    pool = [dict(x) for x in (intervention_pool or INTERVENTION_POOL)]
 
     for i, cid in enumerate(client_ids):
-        delta = INTERVENTION_POOL[i % len(INTERVENTION_POOL)]
+        delta = pool[i % len(pool)]
         state = _run_one(df, cid, delta, ABLATION_VARIANTS[0])
 
         if state.get("status") not in ("done", "degraded"):
@@ -619,18 +740,36 @@ def main() -> None:
                         help="LLM model for judge (default: same as agent)")
     parser.add_argument("--judge-workers", type=int, default=4,
                         help="Parallel judge requests")
+    parser.add_argument("--judge-rubric", choices=sorted(JUDGE_PROMPTS), default="acceptance",
+                        help="Judge rubric: acceptance-oriented bank review (default) or strict top-conference review")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--variants", type=str, default=None,
+                        help="Comma-separated subset of ablation variants (default: all). "
+                             "Allowed: full, no_psm, no_rag, no_graph, llm_only")
+    parser.add_argument("--interventions", type=str, default=None,
+                        help="Comma-separated intervention names for the cyclic pool. "
+                             "Allowed: acquiring, payroll, deposit, credit15, credit25, tariff")
+    parser.add_argument("--num-valid-clients", type=int, default=None,
+                        help="Auto-select this many clients that pass policy for the cyclic intervention pool")
+    parser.add_argument("--scan-limit", type=int, default=None,
+                        help="Maximum number of rows to scan when --num-valid-clients is used")
     args = parser.parse_args()
 
     cfg = get_config()
     api_key = cfg.effective_llm_api_key
     judge_model = args.judge_model or cfg.llm.model_name
 
-    client_ids = [c.strip() for c in args.client_ids.split(",") if c.strip()]
+    intervention_pool = _parse_intervention_pool(args.interventions)
     out_dir = Path(args.out) if args.out else Path("reports") / f"chapter4_{_ts()}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(cfg.paths.artifacts_dir / cfg.paths.synthetic_clients_csv)
+    if args.num_valid_clients is not None:
+        client_ids = _select_applicable_client_ids(
+            df, intervention_pool, args.num_valid_clients, scan_limit=args.scan_limit,
+        )
+    else:
+        client_ids = [c.strip() for c in args.client_ids.split(",") if c.strip()]
     logger.info("Chapter 4 experiments → {} (clients: {})", out_dir, client_ids)
 
     # E1+E3+E4+E6
@@ -639,7 +778,11 @@ def main() -> None:
         rows = pd.read_csv(out_dir / "cases_summary.csv").to_dict("records")
         logger.info("Ablation grid skipped: loaded {} existing rows", len(rows))
     else:
-        rows = run_ablation(df, client_ids, out_dir, seed=args.seed)
+        variants = [v.strip() for v in args.variants.split(",")] if args.variants else None
+        rows = run_ablation(
+            df, client_ids, out_dir, seed=args.seed, variants=variants,
+            intervention_pool=intervention_pool,
+        )
         logger.info("Ablation grid done: {} runs", len(rows))
 
     # E5
@@ -649,14 +792,17 @@ def main() -> None:
         logger.info("Judge skipped: loaded {} existing rows", len(scored))
     elif not args.skip_judge:
         scored = run_judge(rows, out_dir, model=judge_model, api_key=api_key,
-                           max_workers=args.judge_workers)
+                           max_workers=args.judge_workers, rubric=args.judge_rubric)
         logger.info("Judge done: {} verdicts", len(scored))
 
     # E7 — independent
     robustness_rows: List[Dict[str, Any]] = []
     if not args.skip_robustness:
         rb_clients = client_ids[: args.robustness_clients]
-        robustness_rows = run_robustness(df, rb_clients, out_dir, model=judge_model, api_key=api_key)
+        robustness_rows = run_robustness(
+            df, rb_clients, out_dir, model=judge_model, api_key=api_key,
+            intervention_pool=intervention_pool,
+        )
         logger.info("Robustness done: {} clients", len(robustness_rows))
 
     # Aggregate

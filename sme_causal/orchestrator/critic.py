@@ -119,8 +119,21 @@ L2 — Соответствие фактам: утверждения в diagnosi
 L3 — Адекватность хеджирования: при слабых данных текст содержит явные оговорки о неопределённости.
 L4 — Полнота recommendations: рекомендации адресуют именно тот intervention из delta, а не общие пожелания.
 
+Для каждой найденной проблемы укажи severity:
+- "high" — содержательная ошибка, искажающая смысл или вводящая читателя в заблуждение:
+    • ссылка на doc_id, отсутствующий в RAG chunks;
+    • прямое противоречие со знаком PSM ATT (ATT положительный, а в ответе категоричный отрицательный эффект, или наоборот);
+    • утверждения о фактах клиента, которых нет ни в одном из источников (PSM/RAG/Graph);
+    • категоричный вывод при заведомо ненадёжных данных без хеджирования (psm_ok=False, формулировки «гарантирован», «точно»);
+    • полное отсутствие рекомендаций по адресуемой интервенции.
+- "low" — стилистическое замечание, не меняющее содержательную картину:
+    • хеджирование присутствует, но могло бы быть сильнее;
+    • рекомендация даёт направление, но не предельно конкретна;
+    • формулировка корректна по смыслу, но избыточна или общна;
+    • drivers_pos и drivers_neg частично дублируются по идее.
+
 Верни ТОЛЬКО JSON (без markdown):
-{{"llm_issues": [{{"id": "L2", "field": "diagnosis", "note": "..."}}, ...]}}
+{{"llm_issues": [{{"id": "L2", "field": "diagnosis", "severity": "high", "note": "..."}}, ...]}}
 Если проблем нет, верни: {{"llm_issues": []}}
 """
 
@@ -168,10 +181,22 @@ def critic_check_llm(state: CaseState) -> List[str]:
         raw_issues = obj.get("llm_issues", [])
         if not isinstance(raw_issues, list):
             return []
+        items = [it for it in raw_issues if isinstance(it, dict)]
+        high = [it for it in items if it.get("severity", "high") == "high"]
+        low = [it for it in items if it.get("severity") == "low"]
+        if low:
+            logger.info(
+                "L2 critic low-severity issues (logged, not blocking): {} item(s): {}",
+                len(low), low,
+            )
+        if high:
+            logger.warning(
+                "L2 critic high-severity issues (blocking, will trigger retry): {} item(s): {}",
+                len(high), high,
+            )
         return [
             f"[{item.get('id', '?')}] {item.get('field', '?')}: {item.get('note', '?')}"
-            for item in raw_issues
-            if isinstance(item, dict)
+            for item in high
         ]
     except Exception:
         logger.warning("LLM critic failed (fail-open), returning no issues")
