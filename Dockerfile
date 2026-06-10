@@ -15,9 +15,9 @@ WORKDIR /app
 #   curl      — used by HEALTHCHECK
 #   libgomp1  — OpenMP runtime needed by faiss / sklearn wheels on slim image
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        graphviz \
-        curl \
-        libgomp1 \
+    graphviz \
+    curl \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
@@ -33,19 +33,19 @@ COPY . .
 # owner/perms from the image path only when that path already exists).
 RUN useradd -m -u 1000 -s /bin/bash app \
     && mkdir -p \
-        /app/artifacts \
-        /app/rag_data \
-        /app/causal_outputs \
-        /app/reports \
-        /home/app/.cache/huggingface \
+    /app/artifacts \
+    /app/rag_data \
+    /app/causal_outputs \
+    /app/reports \
+    /home/app/.cache/huggingface \
     && chown -R app:app /app /home/app
 
 USER app
 
-VOLUME ["/app/artifacts", \
-        "/app/rag_data", \
-        "/app/causal_outputs", \
-        "/app/reports"]
+# VOLUME ["/app/artifacts", \
+#         "/app/rag_data", \
+#         "/app/causal_outputs", \
+#         "/app/reports"]
 
 EXPOSE 8501
 
@@ -53,7 +53,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -fsS http://localhost:8501/_stcore/health || exit 1
 
 CMD ["streamlit", "run", "sme_causal/app/streamlit_app.py", \
-     "--server.address=0.0.0.0", \
-     "--server.port=8501", \
-     "--server.enableCORS=false", \
-     "--server.enableXsrfProtection=false"]
+    "--server.address=0.0.0.0", \
+    "--server.port=8501", \
+    "--server.enableCORS=false", \
+    "--server.enableXsrfProtection=false"]
