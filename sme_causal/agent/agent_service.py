@@ -270,7 +270,7 @@ class CausalAgent:
             self.graph_path = Path(cfg.algo_edges_path)
         elif graph_method == "llm" and getattr(cfg, "llm_edges_path", ""):
             self.graph_path = Path(cfg.llm_edges_path)
-        elif graph_method == "algo_llm" and getattr(cfg, "algorithmic_dir", ""):
+        elif graph_method == "algo_llm":
             self.graph_path = cfg.full_algorithmic_dir / "algo_llm_edges.json"
         else:
             self.graph_path = None
