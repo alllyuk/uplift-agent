@@ -33,7 +33,7 @@ class RAG:
     def __init__(
         self,
         cfg=get_config(),
-        model_name: str = "intfloat/multilingual-e5-base",
+        model_name: str = "intfloat/multilingual-e5-small",
         chunk_target: Tuple[int, int] = (1000, 1500),
         chunk_overlap: int = 120,
     ):
