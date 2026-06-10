@@ -169,14 +169,14 @@ def main() -> None:
             "Step 3: Running Algorithmic with LLM-based validation causal edge inference"
         )
         algo_llm_edges = build_algo_llm_graph(csv_path=cfg.synthetic_clients_path)
+        edges = create_algo_edges(algo_llm_edges)   # конвертация ДО записи
 
         algo_llm_path = cfg.full_algorithmic_dir / "algo_llm_edges.json"
         with open(algo_llm_path, "w", encoding="utf-8") as f:
-            json.dump(algo_llm_edges, f, ensure_ascii=False, indent=2)
+            json.dump(edges, f, ensure_ascii=False, indent=2)
         logger.success(
-            f"Saved Algo-LLM edges → {algo_llm_path} (edges={len(algo_llm_edges)})"
+            f"Saved Algo-LLM edges → {algo_llm_path} (edges={len(edges)})"
         )
-        edges = create_algo_edges(algo_llm_edges)
 
     # 4) Build and export causal graph
     logger.info("Step 4: Building and exporting causal graph")
