@@ -193,7 +193,7 @@ with st.sidebar:
     graph_method = st.selectbox(
         "Метод построения графа",
         ["llm", "algo", "algo_llm", "hybrid"],
-        index=0,
+        index=2,
     )
     min_conf = st.slider(
         "Порог уверенности рёбер", 0.0, 1.0,

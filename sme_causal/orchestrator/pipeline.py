@@ -32,7 +32,7 @@ class Pipeline:
         df: pd.DataFrame,
         *,
         case_store: Optional[Any] = None,
-        graph_method: str = "llm",
+        graph_method: str = "algo_llm",
         use_rag: bool = True,
         use_graph: bool = True,
         use_psm: bool = True,
